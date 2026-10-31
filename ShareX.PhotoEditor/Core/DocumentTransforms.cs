@@ -78,11 +78,52 @@ public static class DocumentTransforms
     /// <summary>Transforms one layer (and its descendants) in place within the current canvas.</summary>
     public static void TransformLayerInPlace(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample)
     {
-        TransformLayer(layer, matrix, width, height, resample, false, null);
+        TransformLayerContent(layer, matrix, width, height, resample);
         if (layer is GroupLayer group)
         {
-            foreach (Layer child in group.Descendants()) TransformLayer(child, matrix, width, height, resample, false, null);
+            foreach (Layer child in group.Descendants()) TransformLayerContent(child, matrix, width, height, resample);
         }
+    }
+
+    /// <summary>Largest raster layer (in pixels) a transform may create when it keeps content outside the canvas.</summary>
+    private const long MaxExpandedPixels = 64_000_000;
+
+    private static void TransformLayerContent(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample)
+    {
+        if (layer is RasterLayer { IsBackground: false } raster)
+        {
+            TransformRasterKeepingOverflow(raster, matrix, width, height, resample);
+            TransformLayerMask(layer, matrix, width, height);
+            return;
+        }
+        TransformLayer(layer, matrix, width, height, resample, false, null);
+    }
+
+    /// <summary>
+    /// Transforms a raster layer and keeps the parts that land outside the canvas so a later transform can bring them back.
+    /// </summary>
+    private static void TransformRasterKeepingOverflow(RasterLayer raster, SKMatrix matrix, int width, int height, ResampleMethod resample)
+    {
+        SKRectI opaque = raster.GetOpaqueBounds();
+        SKMatrix full = SKMatrix.CreateTranslation(raster.Offset.X, raster.Offset.Y).PostConcat(matrix);
+        SKRect mapped = matrix.MapRect(SKRect.Create(opaque.Left, opaque.Top, opaque.Width, opaque.Height));
+        SKRectI target = opaque.IsEmpty ? new SKRectI(0, 0, width, height) : new SKRectI((int)MathF.Floor(mapped.Left) - 1, (int)MathF.Floor(mapped.Top) - 1, (int)MathF.Ceiling(mapped.Right) + 1, (int)MathF.Ceiling(mapped.Bottom) + 1);
+        // Keep a bounded margin around the canvas so huge scale factors cannot exhaust memory.
+        SKRectI limit = new(-width, -height, width * 2, height * 2);
+        target.Intersect(limit);
+        if (target.IsEmpty || (long)target.Width * target.Height > MaxExpandedPixels) target = new SKRectI(0, 0, width, height);
+        SKBitmap result = ImageOps.CreateBitmap(target.Width, target.Height);
+        using (SKCanvas canvas = new(result))
+        {
+            canvas.Clear(SKColors.Transparent);
+            canvas.Translate(-target.Left, -target.Top);
+            canvas.Concat(full);
+            using SKImage image = SKImage.FromBitmap(raster.Surface.Bitmap);
+            using SKPaint paint = new() { IsAntialias = resample != ResampleMethod.NearestNeighbor };
+            canvas.DrawImage(image, 0, 0, ImageOps.GetSampling(resample), paint);
+        }
+        raster.Surface = new PixelSurface(result);
+        raster.Offset = new SKPointI(target.Left, target.Top);
     }
 
     private static void TransformLayer(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample, bool keepOffsets, SKColor? backgroundFill)
@@ -147,6 +188,11 @@ public static class DocumentTransforms
                 group.ArtboardBounds = SKRectI.Round(matrix.MapRect(SKRect.Create(artboard.Left, artboard.Top, artboard.Width, artboard.Height)));
                 break;
         }
+        TransformLayerMask(layer, matrix, width, height);
+    }
+
+    private static void TransformLayerMask(Layer layer, SKMatrix matrix, int width, int height)
+    {
         if (layer.Mask != null)
         {
             byte fill = MaskOps.Get(layer.Mask, 0, 0);
