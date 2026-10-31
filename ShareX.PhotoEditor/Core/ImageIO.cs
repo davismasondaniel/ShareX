@@ -61,7 +61,19 @@ public static class ImageIO
         if (!File.Exists(path)) throw new FileNotFoundException("The file does not exist.", path);
         if (IsProject(path))
         {
-            PhotoDocument project = ProjectSerializer.Load(path);
+            PhotoDocument project;
+            try
+            {
+                project = ProjectSerializer.Load(path);
+            }
+            catch (InvalidDataException ex) when (ex.Message.Contains("newer version", StringComparison.Ordinal))
+            {
+                throw;
+            }
+            catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException or KeyNotFoundException or NotSupportedException or FormatException)
+            {
+                throw new InvalidDataException($"Could not open \"{Path.GetFileName(path)}\" because it is not a valid Photo editor project or the file is damaged.");
+            }
             project.FilePath = path;
             return project;
         }

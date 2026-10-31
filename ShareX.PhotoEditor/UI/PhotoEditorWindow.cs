@@ -572,6 +572,8 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
         EditorCommand? command = CommandRegistry.Get(commandId);
         if (command == null) return;
         if (command.CanExecute != null && !command.CanExecute(this)) return;
+        // Menu commands act on committed content; undo and redo discard the pending edit themselves.
+        if (IsTextEditing && commandId is not ("edit.undo" or "edit.redo" or "edit.stepBackward" or "edit.stepForward")) EndTextEditing(true);
         try
         {
             command.Execute(this);

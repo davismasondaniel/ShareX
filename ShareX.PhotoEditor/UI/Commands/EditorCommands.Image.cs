@@ -168,6 +168,29 @@ public static partial class EditorCommands
         ApplyAdjustmentDirect(w, settings, name);
     }
 
+    /// <summary>
+    /// Runs a whole-document edit. If it fails part way (for example out of memory), the document is restored to its last
+    /// history state so layers are never left half transformed.
+    /// </summary>
+    private static bool TryEdit(PhotoEditorWindow w, string action, Action edit)
+    {
+        PhotoDocument doc = w.Document!;
+        try
+        {
+            edit();
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (doc.History.Current != null) doc.RestoreState(doc.History.Current.State);
+            w.View?.FitOnScreen();
+            w.RefreshPanels();
+            w.InvalidateCanvas();
+            w.ShowMessage($"Could not {action}: {ex.Message}");
+            return false;
+        }
+    }
+
     private static async Task ImageSizeAsync(PhotoEditorWindow w)
     {
         PhotoDocument doc = w.Document!;
@@ -179,11 +202,13 @@ public static partial class EditorCommands
             w.Commit("Image Size");
             return;
         }
+        bool resized = false;
         await w.RunBusyAsync("Resizing...", _ =>
         {
-            DocumentTransforms.ResizeImage(doc, result.Width, result.Height, result.Method, result.Resolution);
+            resized = TryEdit(w, "resize the image", () => DocumentTransforms.ResizeImage(doc, result.Width, result.Height, result.Method, result.Resolution));
             return Task.CompletedTask;
         });
+        if (!resized) return;
         w.View?.FitOnScreen();
         w.Commit("Image Size");
     }
@@ -193,14 +218,14 @@ public static partial class EditorCommands
         PhotoDocument doc = w.Document!;
         CanvasSizeDialog.Result? result = await CanvasSizeDialog.ShowAsync(w, doc.Width, doc.Height, w.Background);
         if (result == null) return;
-        DocumentTransforms.CanvasSize(doc, result.Width, result.Height, result.Anchor, result.Extension);
+        if (!TryEdit(w, "change the canvas size", () => DocumentTransforms.CanvasSize(doc, result.Width, result.Height, result.Anchor, result.Extension))) return;
         w.View?.FitOnScreen();
         w.Commit("Canvas Size");
     }
 
     private static void RotateCanvas(PhotoEditorWindow w, float degrees)
     {
-        DocumentTransforms.Rotate(w.Document!, degrees, w.Background);
+        if (!TryEdit(w, "rotate the canvas", () => DocumentTransforms.Rotate(w.Document!, degrees, w.Background))) return;
         w.View?.FitOnScreen();
         w.Commit($"Rotate Canvas {degrees}°");
     }

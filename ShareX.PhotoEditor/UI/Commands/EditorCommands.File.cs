@@ -67,7 +67,16 @@ public static partial class EditorCommands
         using (SKBitmap? clip = TryGetClipboardImage()) if (clip != null) clipboardSize = new SKSizeI(clip.Width, clip.Height);
         NewDocumentDialog.Result? result = await NewDocumentDialog.ShowAsync(w, clipboardSize, w.Background);
         if (result == null) return;
-        PhotoDocument doc = new(result.Width, result.Height, result.Resolution, true, result.Background);
+        PhotoDocument doc;
+        try
+        {
+            doc = new PhotoDocument(result.Width, result.Height, result.Resolution, true, result.Background);
+        }
+        catch (Exception ex)
+        {
+            w.ShowMessage($"Could not create the document: {ex.Message}");
+            return;
+        }
         doc.Title = result.Name;
         w.OpenDocument(doc, "New");
     }
@@ -93,7 +102,7 @@ public static partial class EditorCommands
         }
         catch (Exception ex)
         {
-            w.ShowMessage($"Could not open \"{Path.GetFileName(path)}\": {ex.Message}");
+            w.ShowMessage(ex.Message.StartsWith("Could not open", StringComparison.Ordinal) ? ex.Message : $"Could not open \"{Path.GetFileName(path)}\": {ex.Message}");
         }
     }
 
@@ -248,9 +257,16 @@ public static partial class EditorCommands
         if (doc == null) return;
         string? path = await w.PickSaveFileAsync("Quick Export as PNG", Path.GetFileNameWithoutExtension(doc.Title) + ".png", false);
         if (path == null) return;
-        using SKBitmap flat = Compositor.Flatten(doc);
-        ImageIO.SaveBitmap(flat, path);
-        w.SetStatus($"Exported {path}");
+        try
+        {
+            using SKBitmap flat = Compositor.Flatten(doc);
+            ImageIO.SaveBitmap(flat, path);
+            w.SetStatus($"Exported {path}");
+        }
+        catch (Exception ex)
+        {
+            w.ShowMessage($"Could not export: {ex.Message}");
+        }
     }
 
     private static async Task ExportAsAsync(PhotoEditorWindow w)
@@ -291,19 +307,26 @@ public static partial class EditorCommands
         if (doc == null) return;
         string? folder = await PickFolderAsync(w, "Save Slices");
         if (folder == null) return;
-        using SKBitmap flat = Compositor.Flatten(doc);
-        int index = 1;
-        foreach (SliceItem slice in doc.Slices)
+        try
         {
-            SKRectI bounds = slice.Bounds;
-            bounds.Intersect(doc.Bounds);
-            if (bounds.IsEmpty) continue;
-            using SKBitmap part = ImageOps.Crop(flat, bounds);
-            string name = string.IsNullOrWhiteSpace(slice.Name) ? $"slice_{index:00}" : string.Concat(slice.Name.Split(Path.GetInvalidFileNameChars()));
-            ImageIO.SaveBitmap(part, Path.Combine(folder, name + ".png"));
-            index++;
+            using SKBitmap flat = Compositor.Flatten(doc);
+            int index = 1;
+            foreach (SliceItem slice in doc.Slices)
+            {
+                SKRectI bounds = slice.Bounds;
+                bounds.Intersect(doc.Bounds);
+                if (bounds.IsEmpty) continue;
+                using SKBitmap part = ImageOps.Crop(flat, bounds);
+                string name = string.IsNullOrWhiteSpace(slice.Name) ? $"slice_{index:00}" : string.Concat(slice.Name.Split(Path.GetInvalidFileNameChars()));
+                ImageIO.SaveBitmap(part, Path.Combine(folder, name + ".png"));
+                index++;
+            }
+            w.SetStatus($"Saved {index - 1} slices to {folder}");
         }
-        w.SetStatus($"Saved {index - 1} slices to {folder}");
+        catch (Exception ex)
+        {
+            w.ShowMessage($"Could not save slices: {ex.Message}");
+        }
     }
 
     private static async Task ExportLayersAsync(PhotoEditorWindow w)
@@ -312,14 +335,21 @@ public static partial class EditorCommands
         if (doc == null) return;
         string? folder = await PickFolderAsync(w, "Layers to Files");
         if (folder == null) return;
-        int index = 0;
-        foreach (Layer layer in doc.AllLayers.Where(l => l is not GroupLayer and not AdjustmentLayer))
+        try
         {
-            using SKBitmap image = Compositor.RenderLayer(doc, layer);
-            string name = $"{index++:000}_{string.Concat(layer.Name.Split(Path.GetInvalidFileNameChars()))}.png";
-            ImageIO.SaveBitmap(image, Path.Combine(folder, name));
+            int index = 0;
+            foreach (Layer layer in doc.AllLayers.Where(l => l is not GroupLayer and not AdjustmentLayer))
+            {
+                using SKBitmap image = Compositor.RenderLayer(doc, layer);
+                string name = $"{index++:000}_{string.Concat(layer.Name.Split(Path.GetInvalidFileNameChars()))}.png";
+                ImageIO.SaveBitmap(image, Path.Combine(folder, name));
+            }
+            w.SetStatus($"Exported {index} layers to {folder}");
         }
-        w.SetStatus($"Exported {index} layers to {folder}");
+        catch (Exception ex)
+        {
+            w.ShowMessage($"Could not export layers: {ex.Message}");
+        }
     }
 
     /// <summary>Places an image file as a smart object layer centered on the canvas.</summary>

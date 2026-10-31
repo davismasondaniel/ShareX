@@ -67,6 +67,11 @@ public sealed class TypeTool : ToolBase
 
     public bool IsMask => _mask;
 
+    /// <summary>Switching to another tool commits the text being edited.</summary>
+    public override void Commit() => Host.EndTextEditing(true);
+
+    public override void Cancel() => Host.EndTextEditing(false);
+
     public override void PointerDown(ToolInput input)
     {
         if (Doc == null || !input.LeftButton) return;
