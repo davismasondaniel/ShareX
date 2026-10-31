@@ -461,7 +461,7 @@ public static partial class EditorCommands
     public static void MoveLayer(PhotoEditorWindow w, Layer layer, Layer target, int position)
     {
         PhotoDocument doc = w.Document!;
-        if (layer == target || target is GroupLayer && PhotoDocument.IsDescendant(target, layer) || layer.IsBackground) return;
+        if (layer == target || PhotoDocument.IsDescendant(target, layer) || layer.IsBackground) return;
         if (position == 2 && target is GroupLayer group)
         {
             group.Add(layer);

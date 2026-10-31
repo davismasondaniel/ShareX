@@ -48,6 +48,10 @@ public sealed class LayersPanel : EditorPanel
     private Point _dragStart;
     private bool _dragging;
     private (Layer Target, int Position)? _drop;
+    private readonly Dictionary<Layer, RowParts> _rows = [];
+    private static readonly IBrush ThumbFrame = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A));
+
+    private sealed record RowParts(Border Row, TextBlock Name, Border Thumbnail, Border? Mask);
 
     private static NumericUpDown DialogsNumber() => new() { Minimum = 0, Maximum = 100, Increment = 1, FormatString = "0", Width = 42, ShowButtonSpinner = false };
 
@@ -154,8 +158,22 @@ public sealed class LayersPanel : EditorPanel
 
     public override void Refresh()
     {
+        RefreshHeader();
         _updating = true;
         _list.Children.Clear();
+        _rows.Clear();
+        PhotoDocument? doc = Doc;
+        if (doc != null)
+        {
+            foreach (var (layer, depth) in doc.GetLayerListTopDown()) _list.Children.Add(CreateRow(doc, layer, depth));
+        }
+        _updating = false;
+    }
+
+    /// <summary>Updates the blend, opacity, fill and lock controls for the active layer.</summary>
+    private void RefreshHeader()
+    {
+        _updating = true;
         _locks.Children.Clear();
         PhotoDocument? doc = Doc;
         Layer? active = doc?.ActiveLayer;
@@ -169,10 +187,6 @@ public sealed class LayersPanel : EditorPanel
             _locks.Children.Add(LockButton("Lock image pixels", active.LockPixels, () => active.LockPixels = !active.LockPixels, "lock-pixels"));
             _locks.Children.Add(LockButton("Lock position", active.LockPosition, () => active.LockPosition = !active.LockPosition, "lock-position"));
             _locks.Children.Add(LockButton("Lock all", active.LockAll, () => active.LockAll = !active.LockAll, "lock"));
-        }
-        if (doc != null)
-        {
-            foreach (var (layer, depth) in doc.GetLayerListTopDown()) _list.Children.Add(CreateRow(doc, layer, depth));
         }
         _updating = false;
     }
@@ -234,7 +248,7 @@ public sealed class LayersPanel : EditorPanel
         }
 
         bool editingMask = doc.EditingMask && layer == doc.ActiveLayer;
-        IBrush frame = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A));
+        IBrush frame = ThumbFrame;
         Control thumbContent = layer switch
         {
             GroupLayer g => ToolIcons.Create(g.IsArtboard ? "artboard" : "folder", 20),
@@ -266,6 +280,7 @@ public sealed class LayersPanel : EditorPanel
         };
         thumbs.Children.Add(thumbnail);
 
+        Border? maskBorder = null;
         if (layer.Mask != null)
         {
             thumbs.Children.Add(ToolIcons.Create("link", 10));
@@ -301,6 +316,7 @@ public sealed class LayersPanel : EditorPanel
                 e.Handled = true;
             };
             thumbs.Children.Add(mask);
+            maskBorder = mask;
         }
         content.Children.Add(thumbs);
 
@@ -324,13 +340,14 @@ public sealed class LayersPanel : EditorPanel
         Grid.SetColumn(badges, 3);
         content.Children.Add(badges);
         row.Child = content;
+        _rows[layer] = new RowParts(row, name, thumbnail, maskBorder);
 
         row.PointerPressed += (_, e) =>
         {
             PointerPoint point = e.GetCurrentPoint(row);
             if (point.Properties.IsRightButtonPressed)
             {
-                if (!selected) SelectLayer(doc, layer, KeyModifiers.None);
+                if (!IsSelected(doc, layer)) SelectLayer(doc, layer, KeyModifiers.None);
                 ShowContextMenu(row);
                 e.Handled = true;
                 return;
@@ -423,8 +440,28 @@ public sealed class LayersPanel : EditorPanel
         }
         doc.EditingMask = false;
         doc.ActiveChannel = null;
-        Editor.RefreshPanels();
+        // The rows stay alive so a press can turn into a drag-and-drop reorder.
+        ApplySelectionVisuals(doc);
+        RefreshHeader();
+        Editor.RefreshPanelsExcept(this);
         Editor.RefreshOptions();
+        Editor.Canvas.InvalidateOutline();
+        Editor.InvalidateOverlay();
+    }
+
+    private static bool IsSelected(PhotoDocument doc, Layer layer) => layer == doc.ActiveLayer || doc.SelectedLayerIds.Contains(layer.Id);
+
+    private void ApplySelectionVisuals(PhotoDocument doc)
+    {
+        foreach (var (layer, parts) in _rows)
+        {
+            bool selected = IsSelected(doc, layer);
+            bool editingMask = doc.EditingMask && layer == doc.ActiveLayer;
+            parts.Row.Background = selected ? SelectedBrush : Brushes.Transparent;
+            parts.Name.Foreground = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
+            parts.Thumbnail.BorderBrush = selected && !editingMask ? Brushes.White : ThumbFrame;
+            if (parts.Mask != null) parts.Mask.BorderBrush = editingMask ? Brushes.White : ThumbFrame;
+        }
     }
 
     private async Task Rename(Layer layer)

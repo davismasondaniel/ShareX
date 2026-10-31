@@ -113,7 +113,7 @@ public sealed class EyedropperTool : ToolBase
     {
         options.Combo("Sample Size:", [("Point Sample", 1), ("3 by 3 Average", 3), ("5 by 5 Average", 5), ("11 by 11 Average", 11), ("31 by 31 Average", 31), ("51 by 51 Average", 51), ("101 by 101 Average", 101)],
             () => SampleSize, v => SampleSize = v, 140);
-        options.Combo("Sample:", [("Current Layer", false), ("All Layers", true)], () => AllLayers, v => AllLayers = v, 110);
+        options.Combo("Sample:", [("Current Layer", false), ("All Layers", true)], () => AllLayers, v => AllLayers = v, 130);
         options.Check("Show Sampling Ring", () => ShowRing, v => ShowRing = v);
     }
 

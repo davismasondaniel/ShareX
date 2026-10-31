@@ -403,7 +403,7 @@ public sealed class ColorReplacementTool : BrushToolBase
     {
         options.BrushPicker(() => Tip, t => Tip = t, () => Size, v => Size = v);
         options.EnumCombo("Mode:", () => ReplaceMode, v => ReplaceMode = v, 100);
-        options.Combo("Sampling:", [("Continuous", true), ("Once", false)], () => Continuous, v => Continuous = v, 100);
+        options.Combo("Sampling:", [("Continuous", true), ("Once", false)], () => Continuous, v => Continuous = v, 120);
         options.Number("Tolerance:", 1, 100, () => Tolerance, v => Tolerance = (int)v, "0", "%");
     }
 }
@@ -612,7 +612,7 @@ public sealed class CloneStampTool : SourceBrushToolBase
     {
         BuildBrushOptions(options);
         options.Check("Aligned", () => Aligned, v => Aligned = v);
-        options.Combo("Sample:", [("Current Layer", false), ("All Layers", true)], () => SampleAllLayers, v => SampleAllLayers = v, 110);
+        options.Combo("Sample:", [("Current Layer", false), ("All Layers", true)], () => SampleAllLayers, v => SampleAllLayers = v, 130);
     }
 }
 
@@ -1200,7 +1200,7 @@ public sealed class HealingBrushTool : SourceBrushToolBase
     {
         options.BrushPicker(() => Tip, t => Tip = t, () => Size, v => Size = v);
         options.Check("Aligned", () => Aligned, v => Aligned = v);
-        options.Combo("Sample:", [("Current Layer", false), ("All Layers", true)], () => SampleAllLayers, v => SampleAllLayers = v, 110);
+        options.Combo("Sample:", [("Current Layer", false), ("All Layers", true)], () => SampleAllLayers, v => SampleAllLayers = v, 130);
     }
 }
 
