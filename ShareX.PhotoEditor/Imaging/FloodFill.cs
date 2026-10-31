@@ -91,7 +91,10 @@ public static class FloodFill
         return mask;
     }
 
-    /// <summary>Softens stair-stepped edges of a binary mask with a small blur limited to the boundary.</summary>
+    /// <summary>
+    /// Softens stair-stepped edges of a binary mask with a small blur limited to the boundary.
+    /// Straight horizontal and vertical edges are left crisp so pixel-aligned regions keep exact edges.
+    /// </summary>
     public static unsafe void AntialiasEdges(PixelSurface mask)
     {
         int width = mask.Width, height = mask.Height, stride = mask.RowBytes;
@@ -105,23 +108,26 @@ public static class FloodFill
                 for (int x = 0; x < width; x++)
                 {
                     int sum = 0, count = 0;
-                    bool edge = false;
+                    int different = 0, bit = 0;
                     byte center = c[y * stride + x];
                     for (int dy = -1; dy <= 1; dy++)
                     {
                         int ny = y + dy;
-                        if (ny < 0 || ny >= height) continue;
-                        for (int dx = -1; dx <= 1; dx++)
+                        for (int dx = -1; dx <= 1; dx++, bit++)
                         {
                             int nx = x + dx;
-                            if (nx < 0 || nx >= width) continue;
+                            if (ny < 0 || ny >= height || nx < 0 || nx >= width) continue;
                             byte v = c[ny * stride + nx];
-                            if (v != center) edge = true;
+                            if (v != center) different |= 1 << bit;
                             sum += v;
                             count++;
                         }
                     }
-                    if (edge) m[y * stride + x] = (byte)((sum + center * count) / (count * 2));
+                    // Neighbor bits: 0 1 2 / 3 4 5 / 6 7 8 (row-major, 4 is the pixel itself).
+                    // Straight edges, right-angle corners and lone diagonal contacts stay exactly as they are.
+                    bool straight = (different & ~0b000000111) == 0 || (different & ~0b111000000) == 0 || (different & ~0b001001001) == 0 || (different & ~0b100100100) == 0
+                        || different is 0b001001111 or 0b100100111 or 0b111001001 or 0b111100100;
+                    if (different != 0 && !straight) m[y * stride + x] = (byte)((sum + center * count) / (count * 2));
                 }
             }
         }

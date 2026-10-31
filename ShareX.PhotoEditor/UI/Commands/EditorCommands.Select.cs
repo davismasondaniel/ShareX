@@ -196,8 +196,13 @@ public static partial class EditorCommands
     private static async Task ModifyAsync(PhotoEditorWindow w, string name, string label, float initial, Func<PixelSurface, float, PixelSurface> modify)
     {
         PhotoDocument doc = w.Document!;
-        string? text = await DialogBuilder.PromptAsync(w, name + " Selection", label, initial.ToString(System.Globalization.CultureInfo.CurrentCulture));
-        if (!float.TryParse(text, out float value) || value <= 0 || doc.Selection == null) return;
+        NumericUpDown amount = DialogBuilder.Number(0.5, 1000, initial, 0.5, "0.#");
+        amount.AttachedToVisualTree += (_, _) => amount.Focus();
+        Grid form = DialogBuilder.Form();
+        DialogBuilder.AddRow(form, label, amount);
+        if (!await DialogBuilder.ShowAsync(w, name + " Selection", form, 380) || doc.Selection == null) return;
+        float value = (float)(amount.Value ?? (decimal)initial);
+        if (value <= 0) return;
         await w.RunBusyAsync(name + "...", _ => Task.Run(() => doc.SetSelectionLive(modify(doc.Selection, value))));
         doc.SetSelection(doc.Selection);
         w.Commit(name);
