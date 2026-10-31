@@ -126,6 +126,12 @@ public static class GradientEditorDialog
         bool ok = await DialogBuilder.ShowAsync(owner, "Gradient Editor", content, 520);
         if (!ok) return null;
         gradient.Name = string.IsNullOrWhiteSpace(name.Text) ? "Custom" : name.Text;
+        // Editing the stops of a foreground preset turns it into a fixed custom gradient.
+        if (gradient.IsDynamic)
+        {
+            GradientStop[] expected = gradient.ResolveColors(host.Foreground, host.Background).Stops.ToArray();
+            if (!gradient.Stops.SequenceEqual(expected) && expected.Length > 0) gradient.Name = "Custom";
+        }
         return gradient;
     }
 }

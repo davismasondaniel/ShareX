@@ -60,16 +60,33 @@ public sealed class GradientDefinition
         Dither = Dither
     };
 
-    public static GradientDefinition CreateDefault(SKColor start, SKColor end, string name = "Foreground to Background") => new()
+    public static GradientDefinition CreateDefault(SKColor start, SKColor end, string name = ForegroundToBackground) => new()
     {
         Name = name,
         Stops = [new GradientStop(0, start), new GradientStop(1, end)]
     };
 
+    public const string ForegroundToBackground = "Foreground to Background";
+    public const string ForegroundToTransparent = "Foreground to Transparent";
+
+    /// <summary>True for presets that always follow the current foreground and background colors.</summary>
+    public bool IsDynamic => Name is ForegroundToBackground or ForegroundToTransparent;
+
+    /// <summary>Returns this gradient, with the color stops of the foreground presets refreshed from the current colors.</summary>
+    public GradientDefinition ResolveColors(SKColor foreground, SKColor background)
+    {
+        if (!IsDynamic) return this;
+        GradientDefinition resolved = Clone();
+        resolved.Stops = Name == ForegroundToBackground
+            ? [new GradientStop(0, foreground), new GradientStop(1, background)]
+            : [new GradientStop(0, foreground), new GradientStop(1, foreground.WithAlpha(0))];
+        return resolved;
+    }
+
     public static IReadOnlyList<GradientDefinition> CreatePresets(SKColor foreground, SKColor background) =>
     [
         CreateDefault(foreground, background),
-        CreateDefault(foreground, foreground.WithAlpha(0), "Foreground to Transparent"),
+        CreateDefault(foreground, foreground.WithAlpha(0), ForegroundToTransparent),
         CreateDefault(SKColors.Black, SKColors.White, "Black, White"),
         new() { Name = "Spectrum", Stops = [new(0, SKColors.Red), new(0.17f, SKColors.Yellow), new(0.33f, SKColors.Lime), new(0.5f, SKColors.Cyan), new(0.67f, SKColors.Blue), new(0.83f, SKColors.Magenta), new(1, SKColors.Red)] },
         new() { Name = "Sunset", Stops = [new(0, new SKColor(0x2B, 0x1B, 0x4F)), new(0.5f, new SKColor(0xE2, 0x4A, 0x6A)), new(1, new SKColor(0xFF, 0xC8, 0x57))] },

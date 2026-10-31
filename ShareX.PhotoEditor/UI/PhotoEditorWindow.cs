@@ -96,7 +96,7 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
         Settings = EditorSettings.Load(services.SettingsFilePath);
         _foreground = EditorSettings.ParseColor(Settings.Foreground, SKColors.Black);
         _background = EditorSettings.ParseColor(Settings.Background, SKColors.White);
-        Gradient = GradientDefinition.CreateDefault(_foreground, _background);
+        _gradient = GradientDefinition.CreateDefault(_foreground, _background);
         Patterns = PatternDefinition.CreateDefaults();
         BrushPresets = BrushPreset.CreateDefaults();
         if (Settings.Swatches.Count == 0) Settings.Swatches.AddRange(SwatchesPanel.DefaultSwatches);
@@ -245,7 +245,14 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
 
     public PhotoDocument? Document => _view?.Document;
 
-    public GradientDefinition Gradient { get; set; }
+    private GradientDefinition _gradient;
+
+    /// <summary>The active gradient. Foreground presets always reflect the current foreground and background colors.</summary>
+    public GradientDefinition Gradient
+    {
+        get => _gradient.ResolveColors(_foreground, _background);
+        set => _gradient = value;
+    }
 
     public PatternDefinition? Pattern { get; set; }
 
