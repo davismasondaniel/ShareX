@@ -203,7 +203,8 @@ public static class Filters
     }
 
     /// <summary>Generic convolution on premultiplied pixels.</summary>
-    public static unsafe SKBitmap Convolve(SKBitmap source, float[] kernel, int size, float divisor, float bias = 0)
+    /// <param name="keepAlpha">Leaves alpha untouched and clamps colors independently; needed for kernels whose weights sum to zero.</param>
+    public static unsafe SKBitmap Convolve(SKBitmap source, float[] kernel, int size, float divisor, float bias = 0, bool keepAlpha = false)
     {
         SKBitmap result = source.Copy();
         int width = source.Width, height = source.Height, half = size / 2;
@@ -226,8 +227,9 @@ public static class Filters
                         a += (p >> 24) * k; r += ((p >> 16) & 0xFF) * k; g += ((p >> 8) & 0xFF) * k; b += (p & 0xFF) * k;
                     }
                 }
-                uint A = (uint)Math.Clamp(a / divisor + bias, 0, 255);
-                dst[y * stride + x] = (A << 24) | ((uint)Math.Clamp(r / divisor + bias, 0, A) << 16) | ((uint)Math.Clamp(g / divisor + bias, 0, A) << 8) | (uint)Math.Clamp(b / divisor + bias, 0, A);
+                uint A = keepAlpha ? src[y * stride + x] >> 24 : (uint)Math.Clamp(a / divisor + bias, 0, 255);
+                uint max = keepAlpha ? 255 : A;
+                dst[y * stride + x] = (A << 24) | ((uint)Math.Clamp(r / divisor + bias, 0, max) << 16) | ((uint)Math.Clamp(g / divisor + bias, 0, max) << 8) | (uint)Math.Clamp(b / divisor + bias, 0, max);
             }
         });
         return result;
@@ -541,11 +543,23 @@ public static class Filters
 
     public static SKBitmap FindEdges(SKBitmap source)
     {
-        using SKBitmap edges = Convolve(source, [-1, -1, -1, -1, 8, -1, -1, -1, -1], 3, 1);
+        // The kernel sums to zero, so it must not run on the alpha channel (flat areas would become transparent).
+        using SKBitmap opaque = source.Copy();
+        ForceOpaque(opaque);
+        using SKBitmap edges = Convolve(opaque, [-1, -1, -1, -1, 8, -1, -1, -1, -1], 3, 1, 0, keepAlpha: true);
         SKBitmap result = edges.Copy();
         ApplyFunction(result, (ref float r, ref float g, ref float b) => { r = 1 - r; g = 1 - g; b = 1 - b; });
         CopyAlpha(source, result);
         return result;
+    }
+
+    private static unsafe void ForceOpaque(SKBitmap bitmap)
+    {
+        uint* p = (uint*)bitmap.GetPixels();
+        int stride = bitmap.RowBytes / 4;
+        for (int y = 0; y < bitmap.Height; y++)
+            for (int x = 0; x < bitmap.Width; x++)
+                p[y * stride + x] |= 0xFF000000u;
     }
 
     private static unsafe void CopyAlpha(SKBitmap from, SKBitmap to)
