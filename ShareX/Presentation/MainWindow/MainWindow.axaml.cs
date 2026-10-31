@@ -83,7 +83,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     internal ObservableCollection<ThumbnailItemViewModel> ThumbnailItems { get; } = new();
     internal ObservableCollection<HotkeyTipViewModel> HotkeyTips { get; } = new();
-    public AvaloniaBitmap TitleBarIcon { get; }
+    public AvaloniaBitmap? TitleBarIcon { get; private set; }
     public bool IsEmpty => ThumbnailItems.Count == 0;
     public bool IsWindowMaximized => WindowState == Avalonia.Controls.WindowState.Maximized;
     public bool IsDarkTheme => ThemeManager.IsDarkTheme;
@@ -104,8 +104,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         RequestedThemeVariant = ThemeManager.GetCurrentTheme();
         Title = ApplicationInfo.Title;
-        Icon = CreateWindowIcon();
-        TitleBarIcon = CreateTitleBarIcon();
+        UpdateTitleBarIcon();
         DataContext = this;
 
         _trayIconService.RightButtonDown += OnTrayIconRightButtonDown;
@@ -2084,7 +2083,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _trayIconService.RightButtonDown -= OnTrayIconRightButtonDown;
         _trayIconService.RightButtonUp -= OnTrayIconRightButtonUp;
         _trayIconService.Visible = false;
-        TitleBarIcon.Dispose();
+        TitleBarIcon?.Dispose();
 
         foreach (ThumbnailItemViewModel item in ThumbnailItems)
         {
@@ -2123,19 +2122,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ApplicationState.Settings.MainFormSize = new DrawingSize((int)Math.Round(ClientSize.Width), (int)Math.Round(ClientSize.Height));
     }
 
-    private static WindowIcon CreateWindowIcon()
-    {
-        using MemoryStream stream = new(ShareXResources.IconBytes, writable: false);
-        return new WindowIcon(stream);
-    }
-
-    private static AvaloniaBitmap CreateTitleBarIcon()
+    private void UpdateTitleBarIcon()
     {
         using DrawingBitmap bitmap = SkiaImageHelpers.ByteArrayToBitmap(ShareXResources.IconBytes);
         using MemoryStream stream = new();
         bitmap.Save(stream, SkiaSharp.SKEncodedImageFormat.Png);
         stream.Position = 0;
-        return new AvaloniaBitmap(stream);
+
+        AvaloniaBitmap? previous = TitleBarIcon;
+        TitleBarIcon = new AvaloniaBitmap(stream);
+        OnPropertyChanged(nameof(TitleBarIcon));
+        previous?.Dispose();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -2145,6 +2142,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (change.Property == WindowStateProperty)
         {
             OnPropertyChanged(nameof(IsWindowMaximized));
+        }
+        else if (change.Property == IconProperty)
+        {
+            UpdateTitleBarIcon();
         }
     }
 
