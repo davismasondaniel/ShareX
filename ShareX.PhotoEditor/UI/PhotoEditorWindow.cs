@@ -569,6 +569,8 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
     public void AfterHistoryChange()
     {
         if (IsTextEditing) EndTextEditing(false);
+        if (Tools.Active is TransformTool { IsActive: true } transform) transform.Abandon();
+        if (Tools.Active is CropTool crop) crop.Cancel();
         InvalidateCanvas();
         RefreshPanels();
         RefreshOptions();

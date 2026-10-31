@@ -53,7 +53,11 @@ public sealed class CropTool : ToolBase
 
     public override string Hint => "Drag to define the crop area; drag outside it to rotate. Enter commits, Esc cancels.";
 
-    public override bool HasPendingOperation => _active;
+    /// <summary>The crop box counts as a pending operation only once it differs from the whole canvas.</summary>
+    public override bool HasPendingOperation => _active && IsModified;
+
+    private bool IsModified => Doc != null && (_angle != 0 || MathF.Abs(_size.Width - Doc.Width) >= 0.5f || MathF.Abs(_size.Height - Doc.Height) >= 0.5f ||
+        MathF.Abs(_center.X - Doc.Width / 2f) >= 0.5f || MathF.Abs(_center.Y - Doc.Height / 2f) >= 0.5f);
 
     public float RatioWidth { get; set; }
 

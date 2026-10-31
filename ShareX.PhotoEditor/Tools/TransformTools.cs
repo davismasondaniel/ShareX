@@ -77,6 +77,18 @@ public sealed class TransformTool : ToolBase
 
     public bool IsActive => _active;
 
+    /// <summary>True when the layer being transformed was removed or replaced (for example by undo or a layer command).</summary>
+    private bool IsStale => Doc == null || _current == null || !Doc.AllLayers.Contains(_current) || _floatingBase != null && !Doc.AllLayers.Contains(_floatingBase);
+
+    /// <summary>Drops the pending transform without changing the document, because the document changed underneath it.</summary>
+    public void Abandon()
+    {
+        if (!_active) return;
+        End();
+        Host.RefreshPanels();
+        Host.InvalidateCanvas();
+    }
+
     /// <summary>Starts a transform of the active layer (or selection). Returns false if nothing can be transformed.</summary>
     public bool Begin(TransformMode mode, string historyName = "Free Transform")
     {
@@ -177,6 +189,11 @@ public sealed class TransformTool : ToolBase
     public override void Commit()
     {
         if (!_active || Doc == null) return;
+        if (IsStale)
+        {
+            Abandon();
+            return;
+        }
         PhotoDocument doc = Doc;
         UpdatePreview(final: true);
         if (_floatingBase != null && _current is RasterLayer floating)
@@ -244,6 +261,11 @@ public sealed class TransformTool : ToolBase
     public override void PointerDown(ToolInput input)
     {
         if (!_active || !input.LeftButton) return;
+        if (IsStale)
+        {
+            Abandon();
+            return;
+        }
         _handle = HitHandle(input.Screen);
         _dragStart = input.Doc;
         _dragQuad = (SKPoint[])_quad.Clone();
@@ -252,6 +274,11 @@ public sealed class TransformTool : ToolBase
     public override void PointerMove(ToolInput input)
     {
         if (!_active || _handle < 0) return;
+        if (IsStale)
+        {
+            Abandon();
+            return;
+        }
         SKPoint delta = input.Doc - _dragStart;
         TransformMode mode = ForcedMode;
         if (mode == TransformMode.Free)
@@ -362,6 +389,11 @@ public sealed class TransformTool : ToolBase
     public override bool KeyDown(Key key, KeyModifiers modifiers)
     {
         if (!_active) return false;
+        if (IsStale)
+        {
+            Abandon();
+            return false;
+        }
         float step = modifiers.HasFlag(KeyModifiers.Shift) ? 10 : 1;
         SKPoint delta = key switch
         {

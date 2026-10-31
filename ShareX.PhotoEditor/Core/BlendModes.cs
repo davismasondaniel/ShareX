@@ -97,7 +97,7 @@ public static class BlendModes
         _ => mode.ToString()
     };
 
-    /// <summary>Returns the native Skia equivalent, or null when the mode is computed on the CPU.</summary>
+    /// <summary>Returns the native Skia equivalent, or null when the mode is computed on the CPU. Linear Dodge is computed on the CPU because Skia's Plus adds the source alpha-weighted, which differs from blending then mixing at partial opacity.</summary>
     public static SKBlendMode? ToSkia(LayerBlendMode mode) => mode switch
     {
         LayerBlendMode.Normal or LayerBlendMode.PassThrough => SKBlendMode.SrcOver,
@@ -107,7 +107,6 @@ public static class BlendModes
         LayerBlendMode.Lighten => SKBlendMode.Lighten,
         LayerBlendMode.Screen => SKBlendMode.Screen,
         LayerBlendMode.ColorDodge => SKBlendMode.ColorDodge,
-        LayerBlendMode.LinearDodge => SKBlendMode.Plus,
         LayerBlendMode.Overlay => SKBlendMode.Overlay,
         LayerBlendMode.SoftLight => SKBlendMode.SoftLight,
         LayerBlendMode.HardLight => SKBlendMode.HardLight,
