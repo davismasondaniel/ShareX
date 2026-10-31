@@ -66,6 +66,12 @@ public sealed class History
 
     public int MaxStates { get; set; } = 50;
 
+    /// <summary>Approximate memory the history may hold before the oldest states are dropped, so huge images cannot exhaust memory.</summary>
+    public long MemoryBudget { get; set; } = 1_500_000_000;
+
+    /// <summary>The fewest states kept when trimming for memory, so a few undo steps always remain.</summary>
+    private const int MinStates = 4;
+
     /// <summary>The state used by the history brush, art history brush and "erase to history".</summary>
     public HistoryEntry? Source { get; set; }
 
@@ -107,9 +113,33 @@ public sealed class History
             if (Source == oldest) Source = Snapshots.FirstOrDefault();
             Release([oldest]);
         }
+        // Each state shares unchanged surfaces, but edited layers are copied, so large documents can grow quickly.
+        while (Entries.Count > MinStates && EstimateBytes() > MemoryBudget)
+        {
+            HistoryEntry oldest = Entries[0];
+            Entries.RemoveAt(0);
+            if (Source == oldest) Source = Snapshots.FirstOrDefault();
+            Release([oldest]);
+        }
         Index = Entries.Count - 1;
         _document.IsDirty = true;
         Changed?.Invoke();
+    }
+
+    /// <summary>Bytes held by the distinct pixel surfaces referenced by the history, snapshots and the live document.</summary>
+    private long EstimateBytes()
+    {
+        HashSet<PixelSurface> seen = new(_document.LiveSurfaces);
+        foreach (HistoryEntry entry in Entries.Concat(Snapshots))
+        {
+            foreach (PixelSurface surface in entry.State.Surfaces) seen.Add(surface);
+        }
+        long total = 0;
+        foreach (PixelSurface surface in seen)
+        {
+            if (!surface.IsDisposed) total += (long)surface.RowBytes * surface.Height;
+        }
+        return total;
     }
 
     /// <summary>Renames the last entry, used when an operation is refined after recording.</summary>
