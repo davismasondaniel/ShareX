@@ -166,6 +166,17 @@ public sealed class History
         Changed?.Invoke();
     }
 
+    /// <summary>Discards the states after the current one (the redo chain).</summary>
+    public void DiscardRedo()
+    {
+        if (!CanRedo) return;
+        List<HistoryEntry> removed = Entries.GetRange(Index + 1, Entries.Count - Index - 1);
+        Entries.RemoveRange(Index + 1, removed.Count);
+        if (Source != null && removed.Contains(Source)) Source = Snapshots.FirstOrDefault() ?? Current;
+        Release(removed);
+        Changed?.Invoke();
+    }
+
     /// <summary>Discards all states except the current one (Edit &gt; Purge &gt; Histories).</summary>
     public void Purge()
     {

@@ -49,9 +49,9 @@ public sealed class HistoryPanel : EditorPanel
             Doc?.History.CreateSnapshot();
             Refresh();
         }));
-        footer.Children.Add(IconButton("trash", "Delete states after the current one (purge)", () =>
+        footer.Children.Add(IconButton("trash", "Delete the states after the current one", () =>
         {
-            Doc?.History.Purge();
+            Doc?.History.DiscardRedo();
             Refresh();
         }));
         DockPanel root = new();

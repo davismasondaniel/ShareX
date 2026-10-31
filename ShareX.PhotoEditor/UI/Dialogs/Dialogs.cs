@@ -419,9 +419,23 @@ public static class ShortcutsDialog
                     if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt) return;
                     if (e.Key == Key.Back && e.KeyModifiers == KeyModifiers.None) { gesture.Text = string.Empty; edits[id] = string.Empty; e.Handled = true; return; }
                     if (e.Key == Key.Tab) return;
-                    gesture.Text = new KeyGesture(e.Key, e.KeyModifiers).ToString();
+                    KeyGesture recorded = new(e.Key, e.KeyModifiers);
+                    gesture.Text = recorded.ToString();
                     edits[id] = gesture.Text;
                     e.Handled = true;
+                    // A shortcut can only trigger one command, so it moves away from any command that used it.
+                    bool moved = false;
+                    foreach (EditorCommand other in CommandRegistry.Commands.Values)
+                    {
+                        if (other.Id == id) continue;
+                        string otherText = edits.TryGetValue(other.Id, out string? otherCustom) ? otherCustom : other.DefaultGesture ?? string.Empty;
+                        List<string> parts = otherText.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
+                        int removed = parts.RemoveAll(p => CommandRegistry.ParseGesture(p) is KeyGesture g && g.Key == recorded.Key && g.KeyModifiers == recorded.KeyModifiers);
+                        if (removed == 0) continue;
+                        edits[other.Id] = string.Join(", ", parts);
+                        moved = true;
+                    }
+                    if (moved) Build();
                 };
                 Grid row = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
                 TextBlock name = new() { Text = $"{command.Text.Replace("...", string.Empty)}  ({command.Id})", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };

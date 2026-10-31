@@ -102,7 +102,7 @@ public sealed class EditorSettings
         {
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
             {
-                return JsonSerializer.Deserialize<EditorSettings>(File.ReadAllText(path), JsonOptions) ?? new EditorSettings();
+                return (JsonSerializer.Deserialize<EditorSettings>(File.ReadAllText(path), JsonOptions) ?? new EditorSettings()).Normalize();
             }
         }
         catch (Exception ex)
@@ -110,6 +110,26 @@ public sealed class EditorSettings
             System.Diagnostics.Debug.WriteLine($"Photo editor settings could not be loaded: {ex.Message}");
         }
         return new EditorSettings();
+    }
+
+    /// <summary>Replaces missing or out-of-range values read from a hand-edited or older settings file.</summary>
+    private EditorSettings Normalize()
+    {
+        RecentFiles ??= [];
+        Swatches ??= [];
+        Shortcuts ??= [];
+        Toolbar ??= [];
+        HiddenTools ??= [];
+        Panels ??= [];
+        Panels.RemoveAll(p => p == null);
+        foreach (PanelGroupLayout panel in Panels) panel.Panels ??= [];
+        foreach (ToolbarGroupLayout group in Toolbar) group.Tools ??= [];
+        HistoryStates = Math.Clamp(HistoryStates, 5, 1000);
+        GridSubdivisions = Math.Clamp(GridSubdivisions, 1, 100);
+        if (!(GridSpacing >= 1)) GridSpacing = 64;
+        CheckerSize = Math.Clamp(CheckerSize, 2, 64);
+        if (!(RightDockWidth >= 0)) RightDockWidth = 300;
+        return this;
     }
 
     public void Save(string? path)
