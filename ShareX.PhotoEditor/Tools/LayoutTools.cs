@@ -574,6 +574,7 @@ public sealed class SliceSelectTool : ToolBase
             Doc.Slices.Remove(_selected);
             _selected = null;
             PushHistory("Delete Slice");
+            Host.RefreshOptions();
             Host.InvalidateOverlay();
             return true;
         }
@@ -590,13 +591,14 @@ public sealed class SliceSelectTool : ToolBase
 
     public override void BuildOptions(OptionsBuilder options)
     {
-        if (_selected == null)
+        if (_selected is not SliceItem slice)
         {
             options.Label("No slice selected");
             return;
         }
-        options.Text("Name:", () => _selected.Name, v => _selected.Name = v, 160);
-        options.Text("URL:", () => _selected.Url, v => _selected.Url = v, 160);
+        // The options bar can outlive the selection, so the handlers work on the slice they were built for.
+        options.Text("Name:", () => slice.Name, v => slice.Name = v, 160);
+        options.Text("URL:", () => slice.Url, v => slice.Url = v, 160);
         options.Button("Divide...", async () =>
         {
             if (Doc == null || _selected == null) return;

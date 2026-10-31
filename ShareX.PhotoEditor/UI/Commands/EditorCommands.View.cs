@@ -223,7 +223,7 @@ public static partial class EditorCommands
                 C("layer.group"), C("layer.ungroup"), C("layer.hide"), S,
                 MenuNode.Sub("Arrange", C("layer.arrange.front"), C("layer.arrange.forward"), C("layer.arrange.backward"), C("layer.arrange.back")),
                 MenuNode.Sub("Align", C("layer.align.left"), C("layer.align.hcenter"), C("layer.align.right"), S, C("layer.align.top"), C("layer.align.vcenter"), C("layer.align.bottom")),
-                C("layer.lock"), S,
+                C("layer.lock"), C("layer.link"), S,
                 C("layer.mergeDown"), C("layer.mergeVisible"), C("layer.stampVisible"), C("layer.flatten")),
             MenuNode.Sub("_Type",
                 MenuNode.Sub("Orientation", C("type.horizontal"), C("type.vertical")),

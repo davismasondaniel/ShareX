@@ -85,6 +85,7 @@ public static partial class EditorCommands
         R("layer.stampVisible", "Stamp Visible", "Ctrl+Shift+Alt+E", StampVisible, HasDoc);
         R("layer.flatten", "Flatten Image", null, Flatten, HasDoc);
         R("layer.lock", "Lock All", "Ctrl+OemQuestion", w => { Layer l = w.Document!.ActiveLayer!; l.LockAll = !l.LockAll; w.Commit("Lock Layer"); }, HasLayer, w => w.Document?.ActiveLayer?.LockAll == true);
+        R("layer.link", "Link/Unlink Layers", null, ToggleLinkLayers, HasLayer);
         R("layer.hide", "Hide Layers", "Ctrl+OemComma", w => { foreach (Layer l in w.Document!.SelectedLayers) l.Visible = !l.Visible; w.Commit("Hide Layers"); }, HasLayer);
         R("layer.fromBackground", "Layer from Background", null, w => { if (w.Document!.ActiveLayer is RasterLayer r) { LayerOps.UnlockBackground(r); w.Commit("Layer from Background"); } }, w => w.Document?.ActiveLayer is RasterLayer { IsBackground: true });
         R("layer.toBackground", "Background from Layer", null, BackgroundFromLayer, w => w.Document?.ActiveLayer is RasterLayer { IsBackground: false });
@@ -99,6 +100,32 @@ public static partial class EditorCommands
         RasterLayer layer = new($"Layer {doc.AllLayers.Count(l => l is RasterLayer) + 1}", PixelSurface.CreateColor(doc.Width, doc.Height));
         doc.AddLayer(layer);
         w.Commit("New Layer");
+    }
+
+    /// <summary>Links the selected layers so they move together, or unlinks them when they are already linked.</summary>
+    public static void ToggleLinkLayers(IEditorHost host)
+    {
+        PhotoEditorWindow w = W(host);
+        PhotoDocument doc = w.Document!;
+        List<Layer> layers = doc.SelectedLayers.Where(l => !l.IsBackground).ToList();
+        bool anyLinked = layers.Any(l => l.LinkId != 0);
+        bool sameLink = layers.Count > 0 && layers.All(l => l.LinkId != 0) && layers.Select(l => l.LinkId).Distinct().Count() == 1;
+        if (layers.Count < 2 && !anyLinked)
+        {
+            w.ShowMessage("Select two or more layers (Ctrl-click in the Layers panel) to link them.");
+            return;
+        }
+        if (sameLink || layers.Count < 2)
+        {
+            HashSet<int> unlink = layers.Where(l => l.LinkId != 0).Select(l => l.LinkId).ToHashSet();
+            foreach (Layer layer in doc.AllLayers.Where(l => unlink.Contains(l.LinkId))) layer.LinkId = 0;
+            w.Commit("Unlink Layers");
+            return;
+        }
+        HashSet<int> merged = layers.Where(l => l.LinkId != 0).Select(l => l.LinkId).ToHashSet();
+        int id = doc.AllLayers.Select(l => l.LinkId).DefaultIfEmpty(0).Max() + 1;
+        foreach (Layer layer in doc.AllLayers.Where(l => merged.Contains(l.LinkId)).Concat(layers)) layer.LinkId = id;
+        w.Commit("Link Layers");
     }
 
     public static void NewGroup(IEditorHost host)

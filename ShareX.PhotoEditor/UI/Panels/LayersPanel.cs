@@ -106,7 +106,7 @@ public sealed class LayersPanel : EditorPanel
         header.Children.Add(lockRow);
 
         StackPanel footer = new() { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(4, 2) };
-        footer.Children.Add(IconButton("link", "Link layers (select multiple layers with Ctrl-click)", () => { }));
+        footer.Children.Add(IconButton("link", "Link or unlink the selected layers (select several with Ctrl-click) so they move together", () => EditorCommands.ToggleLinkLayers(Editor)));
         footer.Children.Add(IconButton("fx", "Add a layer style", () => _ = EditorCommands.LayerStyle(Editor)));
         footer.Children.Add(IconButton("mask", "Add layer mask (Alt: hide all)", () => EditorCommands.AddMask(Editor, Doc?.Selection != null ? MaskMode.RevealSelection : MaskMode.RevealAll)));
         Button adjust = IconButton("adjust", "Create new fill or adjustment layer", () => { });
@@ -334,6 +334,7 @@ public sealed class LayersPanel : EditorPanel
         content.Children.Add(name);
 
         StackPanel badges = new() { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        if (layer.LinkId != 0) badges.Children.Add(ToolIcons.Create("link", 12));
         if (layer.Style?.HasAny == true) badges.Children.Add(ToolIcons.Create("fx", 13));
         if (layer is SmartObjectLayer) badges.Children.Add(ToolIcons.Create("smart-object", 13));
         if (layer.LockAll || layer.LockPixels || layer.LockPosition || layer.LockTransparency) badges.Children.Add(ToolIcons.Create("lock", 12));
@@ -500,6 +501,8 @@ public sealed class LayersPanel : EditorPanel
         Add("Copy Layer Style", "layer.style.copy");
         Add("Paste Layer Style", "layer.style.paste");
         Add("Clear Layer Style", "layer.style.clear");
+        menu.Items.Add(new Separator());
+        Add("Link/Unlink Layers", "layer.link");
         menu.Items.Add(new Separator());
         Add("Merge Down", "layer.mergeDown");
         Add("Merge Visible", "layer.mergeVisible");

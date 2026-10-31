@@ -455,7 +455,7 @@ public sealed class TransformTool : ToolBase
 
 public sealed class MoveTool : ToolBase
 {
-    private Layer? _layer;
+    private readonly List<Layer> _layers = [];
     private SKPoint _start;
     private SKPoint _applied;
     private bool _moving;
@@ -531,19 +531,37 @@ public sealed class MoveTool : ToolBase
             return;
         }
 
+        _layers.Clear();
         if (layer is RasterLayer raster && doc.Selection != null)
         {
             if (!raster.CanEditPixels) return;
             BeginFloating(raster, input.Alt);
+            _layers.Add(_floating!);
         }
-        else if (input.Alt)
+        else
         {
-            Layer copy = layer.Duplicate();
-            copy.Name = layer.Name + " copy";
-            doc.AddLayer(copy, layer);
-            layer = copy;
+            // Every selected layer (and the layers linked to them) moves together.
+            List<Layer> targets = doc.GetMoveTargets().Where(l => l.CanMove).ToList();
+            if (targets.Count == 0) targets.Add(layer);
+            if (input.Alt)
+            {
+                List<Layer> copies = [];
+                Layer? activeCopy = null;
+                foreach (Layer original in targets)
+                {
+                    Layer copy = original.Duplicate();
+                    copy.Name = original.Name + " copy";
+                    doc.AddLayer(copy, original);
+                    copies.Add(copy);
+                    if (original == layer) activeCopy = copy;
+                }
+                targets = copies;
+                doc.SelectedLayerIds.Clear();
+                foreach (Layer copy in copies) doc.SelectedLayerIds.Add(copy.Id);
+                doc.ActiveLayer = activeCopy ?? copies[^1];
+            }
+            _layers.AddRange(targets);
         }
-        _layer = _floating ?? layer;
         _start = input.Doc;
         _applied = default;
         _moving = true;
@@ -619,23 +637,23 @@ public sealed class MoveTool : ToolBase
             Host.InvalidateOverlay();
             return;
         }
-        if (_layer == null) return;
+        if (_layers.Count == 0) return;
         SKPoint delta = input.Doc - _start;
         if (input.Shift) delta = MathF.Abs(delta.X) > MathF.Abs(delta.Y) ? new SKPoint(delta.X, 0) : new SKPoint(0, delta.Y);
         delta = new SKPoint(MathF.Round(delta.X), MathF.Round(delta.Y));
         SKPoint step = delta - _applied;
         if (step.X == 0 && step.Y == 0) return;
-        SKRect before = _layer.GetContentBounds();
-        _layer.Translate(step.X, step.Y);
+        SKRect before = _layers.Select(l => l.GetContentBounds()).Aggregate(SKRect.Union);
+        foreach (Layer moved in _layers) moved.Translate(step.X, step.Y);
         _applied = delta;
         if (_floating != null && _selectionAtStart != null)
         {
             Doc.SetSelectionLive(MaskOps.Transform(_selectionAtStart, SKMatrix.CreateTranslation(delta.X, delta.Y), Doc.Width, Doc.Height, false));
         }
-        SKRect after = _layer.GetContentBounds();
+        SKRect after = _layers.Select(l => l.GetContentBounds()).Aggregate(SKRect.Union);
         SKRect union = SKRect.Union(before, after);
-        union.Inflate((_layer.Style?.Extent ?? 0) + 2, (_layer.Style?.Extent ?? 0) + 2);
-        Host.InvalidateCanvas(_layer is GroupLayer or AdjustmentLayer || _layer.Style != null ? null : SKRectI.Round(union));
+        union.Inflate(2, 2);
+        Host.InvalidateCanvas(_layers.Any(l => l is GroupLayer or AdjustmentLayer || l.Style != null) ? null : SKRectI.Round(union));
         Host.SetStatus($"Δx: {delta.X:0}  Δy: {delta.Y:0}");
     }
 
@@ -670,7 +688,7 @@ public sealed class MoveTool : ToolBase
             Doc.SetSelection(Doc.Selection);
             Host.InvalidateCanvas();
         }
-        _layer = null;
+        _layers.Clear();
         if (_applied != default || input.Alt) PushHistory("Move");
     }
 
@@ -691,7 +709,8 @@ public sealed class MoveTool : ToolBase
         {
             BeginFloating(raster, false);
             _floating!.Translate(delta.X, delta.Y);
-            _layer = _floating;
+            _layers.Clear();
+            _layers.Add(_floating);
             _selectionAtStart = Doc.Selection;
             Doc.SetSelectionLive(MaskOps.Transform(Doc.Selection!, SKMatrix.CreateTranslation(delta.X, delta.Y), Doc.Width, Doc.Height, false));
             _moving = true;
@@ -700,7 +719,9 @@ public sealed class MoveTool : ToolBase
         }
         else
         {
-            layer.Translate(delta.X, delta.Y);
+            List<Layer> targets = Doc.GetMoveTargets().Where(l => l.CanMove).ToList();
+            if (targets.Count == 0) targets.Add(layer);
+            foreach (Layer target in targets) target.Translate(delta.X, delta.Y);
             PushHistory("Nudge");
         }
         Host.InvalidateCanvas();

@@ -255,6 +255,16 @@ public sealed class PhotoDocument : IDisposable
         }
     }
 
+    /// <summary>The layers a move or nudge applies to: the selected layers plus every layer linked to one of them.</summary>
+    public List<Layer> GetMoveTargets()
+    {
+        List<Layer> selected = SelectedLayers.ToList();
+        HashSet<int> links = selected.Where(l => l.LinkId != 0).Select(l => l.LinkId).ToHashSet();
+        List<Layer> targets = AllLayers.Where(l => selected.Contains(l) || l.LinkId != 0 && links.Contains(l.LinkId)).ToList();
+        // A group already moves its children, so children of a moved group are left out.
+        return targets.Where(l => !targets.Any(o => o != l && IsDescendant(l, o))).ToList();
+    }
+
     public void SetSelection(PixelSurface? selection)
     {
         if (selection != null && MaskOps.IsEmpty(selection)) selection = null;

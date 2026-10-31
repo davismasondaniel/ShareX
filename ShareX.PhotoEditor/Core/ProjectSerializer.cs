@@ -135,6 +135,7 @@ public static class ProjectSerializer
         public bool LockPixels { get; set; }
         public bool LockPosition { get; set; }
         public bool LockAll { get; set; }
+        public int LinkId { get; set; }
         public bool Background { get; set; }
         public string? Mask { get; set; }
         public bool MaskEnabled { get; set; } = true;
@@ -233,6 +234,7 @@ public static class ProjectSerializer
                         LockPixels = layer.LockPixels,
                         LockPosition = layer.LockPosition,
                         LockAll = layer.LockAll,
+                        LinkId = layer.LinkId,
                         Background = layer.IsBackground,
                         MaskEnabled = layer.MaskEnabled,
                         Style = layer.Style,
@@ -421,6 +423,7 @@ public static class ProjectSerializer
             layer.LockPixels = d.LockPixels;
             layer.LockPosition = d.LockPosition;
             layer.LockAll = d.LockAll;
+            layer.LinkId = d.LinkId;
             layer.IsBackground = d.Background;
             layer.MaskEnabled = d.MaskEnabled;
             layer.Style = d.Style;

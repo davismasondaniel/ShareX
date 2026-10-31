@@ -122,6 +122,9 @@ public abstract class Layer
 
     public bool IsBackground { get; set; }
 
+    /// <summary>Layers with the same non-zero link id move together (Layers panel link button).</summary>
+    public int LinkId { get; set; }
+
     /// <summary>Layer mask in document coordinates. 255 reveals, 0 hides.</summary>
     public PixelSurface? Mask { get; set; }
 
@@ -161,6 +164,7 @@ public abstract class Layer
     {
         Layer copy = CloneShared();
         copy.Id = Interlocked.Increment(ref _nextId);
+        copy.LinkId = 0;
         copy.DetachSurfaces();
         return copy;
     }
@@ -183,6 +187,7 @@ public abstract class Layer
         copy.LockPosition = LockPosition;
         copy.LockAll = LockAll;
         copy.IsBackground = IsBackground;
+        copy.LinkId = LinkId;
         copy.Mask = Mask;
         copy.MaskEnabled = MaskEnabled;
         copy.Style = Style?.Clone();
