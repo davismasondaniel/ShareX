@@ -123,6 +123,7 @@ public sealed class PreviewSession
     private unsafe void WriteBack(SKBitmap filtered)
     {
         PixelSurface surface = _layer.Surface;
+        if (surface.IsDisposed) return;
         uint* dst = (uint*)surface.Bitmap.GetPixels();
         uint* src = (uint*)_backup.GetPixels();
         uint* f = (uint*)filtered.GetPixels();
@@ -154,6 +155,8 @@ public sealed class PreviewSession
 
     public void Restore()
     {
+        // The layer may have been replaced or disposed while the dialog was open (for example by closing the document).
+        if (_layer.Surface.IsDisposed || _backup.Handle == IntPtr.Zero) return;
         using SKCanvas canvas = new(_layer.Surface.Bitmap);
         using SKPaint paint = new() { BlendMode = SKBlendMode.Src };
         canvas.DrawBitmap(_backup, 0, 0, paint);

@@ -910,6 +910,12 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
             e.Handled = true;
             return;
         }
+        // While a stroke or drag is in progress only modifier keys, Escape and Enter reach the tool; commands wait for the release.
+        if (Canvas.IsToolPointerDown && e.Key is not (Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.Space or Key.Escape or Key.Enter))
+        {
+            e.Handled = true;
+            return;
+        }
 
         if (e.Key == Key.Space && !Canvas.SpaceHeld)
         {

@@ -155,6 +155,7 @@ public sealed class ZoomTool : ToolBase
     private bool _dragging;
     private bool _zoomOut;
     private double _startZoom;
+    private Vector _startPan;
 
     public ZoomTool(IEditorHost host) : base(host)
     {
@@ -178,6 +179,7 @@ public sealed class ZoomTool : ToolBase
         _zoomOut = input.Alt != ZoomOutDefault;
         _start = _current = input.Screen;
         _startZoom = Host.View.Zoom;
+        _startPan = Host.View.Pan;
         _dragging = true;
     }
 
@@ -189,7 +191,9 @@ public sealed class ZoomTool : ToolBase
         if (ScrubbyZoom)
         {
             double dx = _current.X - _start.X;
+            // Always zoom from the state at the press so the point under the pointer stays fixed.
             Host.View.Zoom = _startZoom;
+            Host.View.Pan = _startPan;
             Host.View.ZoomAt(_startZoom * Math.Pow(1.01, dx), _start);
             Host.RefreshPanels();
         }
@@ -204,6 +208,7 @@ public sealed class ZoomTool : ToolBase
         if (Math.Abs(delta.X) < 3 && Math.Abs(delta.Y) < 3)
         {
             Host.View.Zoom = _startZoom;
+            Host.View.Pan = _startPan;
             Host.View.ZoomStep(!_zoomOut, input.Screen);
         }
         else if (!ScrubbyZoom)

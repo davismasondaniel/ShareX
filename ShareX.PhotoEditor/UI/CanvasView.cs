@@ -70,6 +70,31 @@ public sealed class CanvasView : Control
 
     public SKPoint LastDocPoint => _lastDocPoint;
 
+    /// <summary>True while a tool drag is in progress; document commands wait until it ends.</summary>
+    public bool IsToolPointerDown => _toolPointerDown;
+
+    /// <summary>Runs a tool callback and aborts the drag if the document was replaced underneath it.</summary>
+    private void RunTool(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (ObjectDisposedException)
+        {
+            _toolPointerDown = false;
+            try
+            {
+                _editor.Tools.Active.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            _editor.SetStatus("The edit was cancelled because the document changed.");
+            _editor.InvalidateCanvas();
+        }
+    }
+
     public bool SpaceHeld
     {
         get => _spaceHand;
@@ -380,7 +405,7 @@ public sealed class CanvasView : Control
         e.Pointer.Capture(this);
         _toolPointerDown = true;
         ToolInput input = CreateInput(e, true, e.ClickCount);
-        _editor.Tools.Active.PointerDown(input);
+        RunTool(() => _editor.Tools.Active.PointerDown(input));
         _editor.UpdateStatusForPointer(input.Doc);
     }
 
@@ -398,7 +423,7 @@ public sealed class CanvasView : Control
         }
         ToolInput input = CreateInput(e, _toolPointerDown);
         if (PendingGuide != null) return;
-        _editor.Tools.Active.PointerMove(input);
+        RunTool(() => _editor.Tools.Active.PointerMove(input));
         _editor.UpdateStatusForPointer(input.Doc);
         UpdateCursor();
         if (_editor.Tools.Active.BrushOutlineSize > 0) InvalidateVisual();
@@ -407,16 +432,35 @@ public sealed class CanvasView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        e.Pointer.Capture(null);
         if (_panLast != null)
         {
+            e.Pointer.Capture(null);
             _panLast = null;
             UpdateCursor();
             return;
         }
-        if (_editor.View == null || !_toolPointerDown) return;
+        bool wasDown = _toolPointerDown;
         _toolPointerDown = false;
-        _editor.Tools.Active.PointerUp(CreateInput(e, false));
+        e.Pointer.Capture(null);
+        if (_editor.View == null || !wasDown) return;
+        ToolInput release = CreateInput(e, false);
+        RunTool(() => _editor.Tools.Active.PointerUp(release));
+        _editor.RefreshInfo();
+    }
+
+    /// <summary>Ends a drag when the pointer is taken away (a dialog opened, the window lost focus), so tools and shortcuts never stay stuck.</summary>
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (_panLast != null)
+        {
+            _panLast = null;
+            UpdateCursor();
+        }
+        if (!_toolPointerDown || _editor.View is not DocumentView view) return;
+        _toolPointerDown = false;
+        ToolInput release = new() { Doc = _lastDocPoint, Screen = view.DocToScreen(_lastDocPoint), IsPressed = false };
+        RunTool(() => _editor.Tools.Active.PointerUp(release));
         _editor.RefreshInfo();
     }
 

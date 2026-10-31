@@ -33,12 +33,15 @@ namespace ShareX.PhotoEditor.Core;
 /// </summary>
 public sealed class PixelSurface : IDisposable
 {
+    private readonly SKBitmap _bitmap;
+
     public PixelSurface(SKBitmap bitmap)
     {
-        Bitmap = bitmap ?? throw new ArgumentNullException(nameof(bitmap));
+        _bitmap = bitmap ?? throw new ArgumentNullException(nameof(bitmap));
     }
 
-    public SKBitmap Bitmap { get; private set; }
+    /// <summary>The pixels. Using a disposed surface throws instead of crashing inside the native graphics library.</summary>
+    public SKBitmap Bitmap => IsDisposed ? throw new ObjectDisposedException(nameof(PixelSurface)) : _bitmap;
 
     public bool Frozen { get; private set; }
 
@@ -101,6 +104,6 @@ public sealed class PixelSurface : IDisposable
     {
         if (IsDisposed) return;
         IsDisposed = true;
-        Bitmap.Dispose();
+        _bitmap.Dispose();
     }
 }

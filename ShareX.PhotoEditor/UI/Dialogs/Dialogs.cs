@@ -96,8 +96,16 @@ public static class ExportDialog
             updating = false;
         };
         Grid form = DialogBuilder.Form();
-        DialogBuilder.AddRow(form, "Format:", DialogBuilder.Combo([("PNG", ".png"), ("JPEG", ".jpg"), ("WebP", ".webp"), ("GIF", ".gif"), ("BMP", ".bmp"), ("TIFF", ".tif")], extension, v => extension = v));
+        List<Control> qualityRow = [];
+        DialogBuilder.AddRow(form, "Format:", DialogBuilder.Combo([("PNG", ".png"), ("JPEG", ".jpg"), ("WebP", ".webp"), ("GIF", ".gif"), ("BMP", ".bmp"), ("TIFF", ".tif")], extension, v =>
+        {
+            extension = v;
+            // Only lossy formats have a quality setting.
+            foreach (Control control in qualityRow) control.IsVisible = extension is ".jpg" or ".webp";
+        }));
         DialogBuilder.AddRow(form, "Quality:", DialogBuilder.SliderNumber(1, 100, quality, v => quality = (int)v));
+        qualityRow.AddRange(form.Children.TakeLast(2).Cast<Control>());
+        foreach (Control control in qualityRow) control.IsVisible = false;
         DialogBuilder.AddRow(form, "Width (px):", width);
         DialogBuilder.AddRow(form, "Height (px):", height);
         if (!await DialogBuilder.ShowAsync(owner, "Export As", form, 420, "Export...")) return null;
