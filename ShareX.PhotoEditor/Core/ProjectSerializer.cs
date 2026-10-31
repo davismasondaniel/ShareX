@@ -65,6 +65,14 @@ public static class ProjectSerializer
         public PathDto? WorkPath { get; set; }
     }
 
+    private sealed class SmartFilterDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Key { get; set; } = string.Empty;
+        public bool Enabled { get; set; } = true;
+        public SmartFilterRecipe Recipe { get; set; } = new();
+    }
+
     private sealed class ChannelDto
     {
         public string Name { get; set; } = string.Empty;
@@ -178,6 +186,7 @@ public static class ProjectSerializer
         public float PatternScale { get; set; } = 1;
 
         public string? Source { get; set; }
+        public List<SmartFilterDto>? SmartFilters { get; set; }
 
         public SKRect Frame { get; set; }
         public bool Ellipse { get; set; }
@@ -268,6 +277,7 @@ public static class ProjectSerializer
                         case SmartObjectLayer smart:
                             dto.Source = WritePng(smart.Source.Bitmap, "smart");
                             dto.Transform = smart.Transform;
+                            dto.SmartFilters = smart.Filters.Where(f => f.Recipe != null).Select(f => new SmartFilterDto { Name = f.Name, Key = f.Key, Enabled = f.Enabled, Recipe = f.Recipe! }).ToList();
                             break;
                         case FrameLayer frame:
                             dto.Frame = frame.Frame; dto.Ellipse = frame.Ellipse; dto.ContentRect = frame.ContentRect;
@@ -382,6 +392,11 @@ public static class ProjectSerializer
                     {
                         Transform = d.Transform ?? SKMatrix.Identity
                     };
+                    foreach (SmartFilterDto filterDto in d.SmartFilters ?? [])
+                    {
+                        SmartFilter? restored = SmartFilterFactory.Restore(filterDto.Name, filterDto.Key, filterDto.Enabled, filterDto.Recipe);
+                        if (restored != null) ((SmartObjectLayer)layer).Filters.Add(restored);
+                    }
                     break;
                 case LayerKind.Frame:
                     layer = new FrameLayer(d.Name, d.Frame, d.Ellipse)

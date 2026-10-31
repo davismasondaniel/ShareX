@@ -951,7 +951,7 @@ public sealed class SmartObjectLayer : Layer
     public SKBitmap GetFilteredSource()
     {
         if (Filters.Count == 0) return Source.Bitmap;
-        string key = string.Join("|", Filters.Select(f => f.Key)) + "|" + Source.GetHashCode();
+        string key = string.Join("|", Filters.Select(f => (f.Enabled ? "+" : "-") + f.Key)) + "|" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Source);
         if (_filtered == null || _filterKey != key)
         {
             _filtered?.Dispose();
@@ -997,7 +997,23 @@ public sealed class SmartFilter
 
     public Func<SKBitmap, SKBitmap> Apply { get; }
 
-    public SmartFilter Clone() => new(Name, Key, Apply) { Enabled = Enabled };
+    /// <summary>Serializable description used to rebuild the filter when a project is loaded.</summary>
+    public SmartFilterRecipe? Recipe { get; init; }
+
+    public SmartFilter Clone() => new(Name, Key, Apply) { Enabled = Enabled, Recipe = Recipe };
+}
+
+/// <summary>Serializable parameters of a smart filter. Which fields are used depends on <see cref="Kind"/>.</summary>
+public sealed class SmartFilterRecipe
+{
+    public string Kind { get; set; } = string.Empty;
+    public string Id { get; set; } = string.Empty;
+    public Dictionary<string, float>? Values { get; set; }
+    public int Seed { get; set; }
+    public SKColor Foreground { get; set; } = SKColors.Black;
+    public SKColor Background { get; set; } = SKColors.White;
+    public AdjustmentSettings? Adjustment { get; set; }
+    public Dictionary<string, string>? Library { get; set; }
 }
 
 /// <summary>A placeholder frame that crops placed content to a rectangle or ellipse.</summary>

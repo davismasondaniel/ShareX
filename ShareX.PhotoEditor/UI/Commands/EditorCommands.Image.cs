@@ -73,7 +73,7 @@ public static partial class EditorCommands
         PhotoDocument doc = w.Document!;
         if (doc.ActiveLayer is SmartObjectLayer smart)
         {
-            AddSmartFilter(w, smart, name, settings.Kind.ToString(), b => { SKBitmap copy = b.Copy(); Adjustments.Apply(settings, copy, new SKRectI(0, 0, copy.Width, copy.Height)); return copy; });
+            AddSmartFilter(w, smart, SmartFilterFactory.CreateAdjustment(name, settings, smart.Filters.Count));
             return;
         }
         RasterLayer? layer = EditableRaster(w, name.ToLowerInvariant());
@@ -101,13 +101,7 @@ public static partial class EditorCommands
             Control smartEditor = AdjustmentEditor.Build(settings, () => { }, smart.Source.Bitmap, w);
             if (await DialogBuilder.ShowAsync(w, name, smartEditor, 460))
             {
-                AdjustmentSettings captured = settings.Clone();
-                AddSmartFilter(w, smart, name, $"{kind}:{string.Join(",", captured.Values.Select(v => v.Key + v.Value))}", b =>
-                {
-                    SKBitmap copy = b.Copy();
-                    Adjustments.Apply(captured, copy, new SKRectI(0, 0, copy.Width, copy.Height));
-                    return copy;
-                });
+                AddSmartFilter(w, smart, SmartFilterFactory.CreateAdjustment(name, settings, smart.Filters.Count));
             }
             return;
         }
@@ -146,10 +140,10 @@ public static partial class EditorCommands
         result = panel;
     }
 
-    private static void AddSmartFilter(PhotoEditorWindow w, SmartObjectLayer smart, string name, string key, Func<SKBitmap, SKBitmap> apply)
+    private static void AddSmartFilter(PhotoEditorWindow w, SmartObjectLayer smart, SmartFilter filter)
     {
-        smart.Filters.Add(new SmartFilter(name, key + "#" + smart.Filters.Count, apply));
-        w.Commit(name + " (Smart Filter)");
+        smart.Filters.Add(filter);
+        w.Commit(filter.Name + " (Smart Filter)");
     }
 
     private static void Equalize(PhotoEditorWindow w)

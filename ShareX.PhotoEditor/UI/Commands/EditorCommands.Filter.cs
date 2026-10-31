@@ -118,7 +118,7 @@ public static partial class EditorCommands
         }
         if (smart != null)
         {
-            AddSmartFilter(w, smart, filter.Name, filter.Key(values), Make());
+            AddSmartFilter(w, smart, SmartFilterFactory.CreateFilter(filter, values, context, smart.Filters.Count));
         }
         else
         {
@@ -153,24 +153,7 @@ public static partial class EditorCommands
         if (raster == null && smart == null) return;
         ImageEffectBase template = (ImageEffectBase)Activator.CreateInstance(effectType)!;
         Dictionary<string, object?> values = preset ?? [];
-        Func<SKBitmap, SKBitmap> Make()
-        {
-            Dictionary<string, object?> snapshot = new(values);
-            return b =>
-            {
-                ImageEffectBase effect = (ImageEffectBase)Activator.CreateInstance(effectType)!;
-                foreach (EffectParameter parameter in effect.Parameters)
-                {
-                    snapshot.TryGetValue(parameter.Key, out object? value);
-                    parameter.Apply(effect, value);
-                }
-                using SKBitmap input = ToUnpremul(b);
-                SKBitmap output = effect.Apply(input);
-                SKBitmap converted = ImageOps.Convert(output);
-                if (!ReferenceEquals(output, input)) output.Dispose();
-                return converted;
-            };
-        }
+        Func<SKBitmap, SKBitmap> Make() => SmartFilterFactory.LibraryFunc(effectType, values);
         if (preset == null && template.Parameters.Count > 0)
         {
             PreviewSession? session = raster != null ? new PreviewSession(w, raster, 96) : null;
@@ -193,7 +176,7 @@ public static partial class EditorCommands
                 return;
             }
         }
-        if (smart != null) AddSmartFilter(w, smart, template.Name, effectType.Name + string.Join(",", values.Select(v => $"{v.Key}={v.Value}")), Make());
+        if (smart != null) AddSmartFilter(w, smart, SmartFilterFactory.CreateLibrary(template.Name, effectType, values, smart.Filters.Count));
         else await new PreviewSession(w, raster!, 96).CommitAsync(Make(), template.Name);
         RememberLibrary(w, effectType, template.Name, values);
     }
@@ -203,15 +186,6 @@ public static partial class EditorCommands
         Dictionary<string, object?> copy = new(values);
         w.LastFilterName = name;
         w.RepeatLastFilter = () => _ = RunLibraryEffectAsync(w, type, copy);
-    }
-
-    private static SKBitmap ToUnpremul(SKBitmap source)
-    {
-        // The shared effects library treats BGRA pixels as unpremultiplied SKColor values.
-        SKBitmap result = new(new SKImageInfo(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul));
-        using SKPixmap pixmap = source.PeekPixels();
-        pixmap.ReadPixels(result.Info, result.GetPixels(), result.RowBytes);
-        return result;
     }
 
     private static Control? CreateParameterEditor(PhotoEditorWindow w, EffectParameter parameter, Dictionary<string, object?> values, Action changed)

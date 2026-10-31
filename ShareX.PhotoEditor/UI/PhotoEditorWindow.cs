@@ -88,6 +88,7 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
     private bool _panelsHidden;
     private bool _closingConfirmed;
     private double _tabZoom;
+    private int _busyCount;
 
     public PhotoEditorWindow(PhotoEditorServices services)
     {
@@ -316,6 +317,7 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
 
     public async Task<bool> CloseViewAsync(DocumentView view)
     {
+        if (IsBusy) return false;
         if (view.Document.IsDirty)
         {
             ActivateView(view);
@@ -519,8 +521,12 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
         return _view.Composite!.Copy();
     }
 
+    /// <summary>True while a background operation runs; documents must not be closed or edited meanwhile.</summary>
+    public bool IsBusy => _busyCount > 0;
+
     public async Task RunBusyAsync(string message, Func<IProgress<float>?, Task> work)
     {
+        _busyCount++;
         _busyText.Text = message;
         _busyProgress.Value = 0;
         _busy.IsVisible = true;
@@ -535,7 +541,8 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
         }
         finally
         {
-            _busy.IsVisible = false;
+            _busyCount--;
+            if (_busyCount == 0) _busy.IsVisible = false;
         }
     }
 
@@ -887,7 +894,7 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
             return;
         }
         if (IsTextInput(e.Source)) return;
-        if (_busy.IsVisible)
+        if (IsBusy)
         {
             e.Handled = true;
             return;
@@ -1005,6 +1012,11 @@ public sealed class PhotoEditorWindow : Window, IEditorHost
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (IsBusy)
+        {
+            e.Cancel = true;
+            return;
+        }
         if (_closingConfirmed)
         {
             SaveSettings();
