@@ -159,10 +159,6 @@ public static partial class EditorCommands
         R("window.workspace.save", "Save Workspace", null, w => { w.SaveSettings(); w.SetStatus("Workspace saved."); });
         R("window.nextDocument", "Next Document", "Ctrl+Tab", w => CycleDocument(w, 1), w => w.Views.Count > 1);
         R("window.previousDocument", "Previous Document", "Ctrl+Shift+Tab", w => CycleDocument(w, -1), w => w.Views.Count > 1);
-        R("help.about", "About Photo editor...", null, w => _ = DialogBuilder.ShowMessageAsync(w, "About Photo editor",
-            "Photo editor for ShareX\n\nA layer-based image editor with selection, painting, retouching, vector, type and adjustment tools.\nPart of ShareX, licensed under the GNU General Public License v3."));
-        R("help.shortcuts", "Keyboard Shortcuts...", null, w => _ = ShortcutsDialog.ShowAsync(w));
-        R("help.tool", "Current Tool Help", "F1", w => _ = DialogBuilder.ShowMessageAsync(w, w.Tools.Active.Name, w.Tools.Active.Hint.Length > 0 ? w.Tools.Active.Hint : "No help is available for this tool."));
     }
 
     private static readonly (string Id, string Title)[] PanelIds =
@@ -255,8 +251,7 @@ public static partial class EditorCommands
                     .Concat(PanelIds.Select(p => C($"window.panel.{p.Id}")))
                     .Concat([S, C("window.options"), C("window.tools"), C("window.toolsTwoColumns"), C("window.dock"), S, C("window.nextDocument"), C("window.previousDocument"), S]).ToList(),
                 Dynamic = w => w.Views.Select(v => new MenuNode { Header = v.Document.DisplayName, Action = win => win.ActivateView(v) })
-            },
-            MenuNode.Sub("_Help", C("help.tool"), C("help.shortcuts"), S, C("help.about"))
+            }
         ];
     }
 }

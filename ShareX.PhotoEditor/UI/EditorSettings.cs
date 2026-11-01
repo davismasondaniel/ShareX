@@ -67,6 +67,10 @@ public sealed class EditorSettings
     public string Background { get; set; } = "#FFFFFF";
     public ResampleMethod DefaultResample { get; set; } = ResampleMethod.Bicubic;
     public List<string> RecentFiles { get; set; } = [];
+
+    /// <summary>Shows the recent files on the home screen as tiles instead of a list.</summary>
+    public bool RecentTiles { get; set; }
+
     public List<string> Swatches { get; set; } = [];
 
     /// <summary>Command id to key gesture (e.g. "edit.undo" = "Ctrl+Z"). Missing entries use defaults.</summary>

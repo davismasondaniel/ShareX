@@ -41,8 +41,10 @@ public sealed class StartScreen : Border
     private static readonly IBrush ThumbBrush = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26));
 
     private readonly PhotoEditorWindow _editor;
-    private readonly StackPanel _recent = new() { Spacing = 2 };
+    private readonly ScrollViewer _recentScroller = new() { MaxHeight = 460, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
     private readonly TextBlock _recentEmpty = new() { Text = "Files you open will appear here.", Classes = { "dim" }, Margin = new Thickness(0, 8) };
+    private readonly Button _viewModeButton = new() { Classes = { "icon" }, Width = 28, Height = 26, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center };
+    private readonly Button _clearButton = new() { Classes = { "icon" }, Width = 28, Height = 26, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center };
 
     public StartScreen(PhotoEditorWindow editor)
     {
@@ -59,10 +61,33 @@ public sealed class StartScreen : Border
         if (editor.Services.CaptureRegion != null) actions.Children.Add(LinkButton("capture-region", "New from Screenshot (Region)", "file.newFromRegion"));
         if (editor.Services.CaptureFullscreen != null) actions.Children.Add(LinkButton("capture-screen", "New from Screenshot (Full Screen)", "file.newFromScreen"));
 
+        _clearButton.Content = ToolIcons.Create("trash", 16);
+        ToolTip.SetTip(_clearButton, "Clear recent files");
+        _clearButton.Click += (_, _) =>
+        {
+            _editor.Settings.RecentFiles.Clear();
+            _editor.SaveSettings();
+            Refresh();
+        };
+        _viewModeButton.Click += (_, _) =>
+        {
+            _editor.Settings.RecentTiles = !_editor.Settings.RecentTiles;
+            _editor.SaveSettings();
+            Refresh();
+        };
+
+        StackPanel headerButtons = new() { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        headerButtons.Children.Add(_viewModeButton);
+        headerButtons.Children.Add(_clearButton);
+        Grid header = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 0, 0, 6) };
+        Grid.SetColumn(headerButtons, 1);
+        header.Children.Add(new TextBlock { Text = "Recent", FontSize = 16, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
+        header.Children.Add(headerButtons);
+
         StackPanel recentColumn = new() { Spacing = 6 };
-        recentColumn.Children.Add(new TextBlock { Text = "Recent", FontSize = 16, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 6) });
+        recentColumn.Children.Add(header);
         recentColumn.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromRgb(0x47, 0x47, 0x47)) });
-        recentColumn.Children.Add(new ScrollViewer { Content = _recent, MaxHeight = 460, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
+        recentColumn.Children.Add(_recentScroller);
         recentColumn.Children.Add(_recentEmpty);
 
         Grid layout = new()
@@ -80,9 +105,17 @@ public sealed class StartScreen : Border
 
     public void Refresh()
     {
-        _recent.Children.Clear();
-        foreach (string path in _editor.Settings.RecentFiles.Where(File.Exists).Take(12)) _recent.Children.Add(RecentRow(path));
-        _recentEmpty.IsVisible = _recent.Children.Count == 0;
+        bool tiles = _editor.Settings.RecentTiles;
+        List<string> files = _editor.Settings.RecentFiles.Where(File.Exists).Take(12).ToList();
+        Panel panel = tiles ? new WrapPanel() : new StackPanel { Spacing = 2 };
+        foreach (string path in files) panel.Children.Add(tiles ? RecentTile(path) : RecentRow(path));
+        _recentScroller.Content = panel;
+        _recentScroller.IsVisible = files.Count > 0;
+        _recentEmpty.IsVisible = files.Count == 0;
+        _clearButton.IsEnabled = _editor.Settings.RecentFiles.Count > 0;
+
+        _viewModeButton.Content = ToolIcons.Create(tiles ? "list-view" : "tile-view", 16);
+        ToolTip.SetTip(_viewModeButton, tiles ? "Show recent files as a list" : "Show recent files as tiles");
     }
 
     private Button ActionButton(string text, string commandId, bool primary)
@@ -113,7 +146,7 @@ public sealed class StartScreen : Border
     private Border RecentRow(string path)
     {
         Border thumb = new() { Width = 56, Height = 42, Background = ThumbBrush, CornerRadius = new CornerRadius(2), ClipToBounds = true };
-        LoadThumbnail(thumb, path);
+        LoadThumbnail(thumb, path, 112);
         StackPanel text = new() { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
         text.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });
         text.Children.Add(new TextBlock { Text = Path.GetDirectoryName(path), Classes = { "dim" }, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
@@ -126,7 +159,26 @@ public sealed class StartScreen : Border
         grid.Children.Add(text);
         grid.Children.Add(modified);
 
-        Border row = new() { Child = grid, Padding = new Thickness(6), CornerRadius = new CornerRadius(3), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand) };
+        return Clickable(new Border { Child = grid, Padding = new Thickness(6) }, path);
+    }
+
+    private Border RecentTile(string path)
+    {
+        Border thumb = new() { Width = 152, Height = 104, Background = ThumbBrush, CornerRadius = new CornerRadius(2), ClipToBounds = true };
+        LoadThumbnail(thumb, path, 304);
+        StackPanel content = new() { Spacing = 4, Width = 152 };
+        content.Children.Add(thumb);
+        content.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });
+        content.Children.Add(new TextBlock { Text = File.GetLastWriteTime(path).ToString("g"), Classes = { "dim" }, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
+        return Clickable(new Border { Child = content, Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 8) }, path);
+    }
+
+    /// <summary>Makes a recent-file entry open its file on click and highlight on hover.</summary>
+    private Border Clickable(Border row, string path)
+    {
+        row.CornerRadius = new CornerRadius(3);
+        row.Background = Brushes.Transparent;
+        row.Cursor = new Cursor(StandardCursorType.Hand);
         ToolTip.SetTip(row, path);
         row.PointerEntered += (_, _) => row.Background = CardHoverBrush;
         row.PointerExited += (_, _) => row.Background = Brushes.Transparent;
@@ -139,7 +191,7 @@ public sealed class StartScreen : Border
         return row;
     }
 
-    private static void LoadThumbnail(Border target, string path)
+    private static void LoadThumbnail(Border target, string path, int decodeWidth)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
         if (extension is not (".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".webp")) return;
@@ -148,7 +200,7 @@ public sealed class StartScreen : Border
             try
             {
                 using FileStream stream = File.OpenRead(path);
-                return Bitmap.DecodeToWidth(stream, 112);
+                return Bitmap.DecodeToWidth(stream, decodeWidth);
             }
             catch
             {
