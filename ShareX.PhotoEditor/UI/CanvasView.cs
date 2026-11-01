@@ -40,7 +40,11 @@ public sealed class CanvasView : Control
     private readonly PhotoEditorWindow _editor;
     private readonly DispatcherTimer _antsTimer;
     private PixelSurface? _outlineSource;
-    private List<(SKPoint A, SKPoint B)>? _outline;
+    private StreamGeometry? _outline;
+    private int _outlineSegments;
+
+    /// <summary>Outlines with more segments than this are drawn without dashes or animation to stay responsive.</summary>
+    private const int MaxAnimatedSegments = 5000;
     private Point? _panLast;
     private bool _spaceHand;
     private bool _toolPointerDown;
@@ -58,6 +62,7 @@ public sealed class CanvasView : Control
         {
             DocumentView? view = _editor.View;
             if (view?.Document.Selection == null || !_editor.Settings.ShowSelectionEdges || view.Document.QuickMask) return;
+            if (_outlineSegments > MaxAnimatedSegments) return;
             view.AntsPhase = (view.AntsPhase + 1) % 8;
             InvalidateVisual();
         };
@@ -251,17 +256,19 @@ public sealed class CanvasView : Control
         if (!ReferenceEquals(_outlineSource, selection))
         {
             _outlineSource = selection;
-            _outline = MaskOps.TraceOutline(selection);
+            List<(SKPoint A, SKPoint B)> segments = MaskOps.TraceOutline(selection);
+            _outlineSegments = segments.Count;
+            _outline = BuildOutline(segments);
         }
         if (_outline == null) return;
-        Pen black = new(Brushes.Black, 1);
-        Pen white = new(Brushes.White, 1, new DashStyle([4, 4], view.AntsPhase));
-        Matrix m = view.DocToScreenMatrix;
-        foreach (var (a, b) in _outline)
+        // One geometry in document space, drawn through the view transform: cost no longer grows with every selection segment.
+        double thickness = 1 / view.Zoom;
+        Pen black = new(Brushes.Black, thickness);
+        Pen white = _outlineSegments > MaxAnimatedSegments ? new(Brushes.White, thickness * 0.5) : new(Brushes.White, thickness, new DashStyle([4, 4], view.AntsPhase));
+        using (context.PushTransform(view.DocToScreenMatrix))
         {
-            Point pa = new Point(a.X, a.Y).Transform(m), pb = new Point(b.X, b.Y).Transform(m);
-            context.DrawLine(black, pa, pb);
-            context.DrawLine(white, pa, pb);
+            context.DrawGeometry(null, black, _outline);
+            context.DrawGeometry(null, white, _outline);
         }
     }
 
@@ -358,6 +365,19 @@ public sealed class CanvasView : Control
             FormattedText text = new((index++).ToString(), System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 11, Brushes.White);
             overlay.Drawing.DrawText(text, new Point(p.X + 8, p.Y + 4));
         }
+    }
+
+    private static StreamGeometry BuildOutline(List<(SKPoint A, SKPoint B)> segments)
+    {
+        StreamGeometry geometry = new();
+        using StreamGeometryContext g = geometry.Open();
+        foreach (var (a, b) in segments)
+        {
+            g.BeginFigure(new Point(a.X, a.Y), false);
+            g.LineTo(new Point(b.X, b.Y));
+            g.EndFigure(false);
+        }
+        return geometry;
     }
 
     public void InvalidateOutline() => _outlineSource = null;
