@@ -111,6 +111,8 @@ public static class Compositor
                 continue;
             }
 
+            if (clipped.Count == 0 && TryDrawRasterDirect(layer, accumulator, context)) continue;
+
             using SKBitmap content = RenderLayerContent(layer, context, true);
             if (clipped.Count > 0)
             {
@@ -119,6 +121,23 @@ public static class Compositor
             }
             Composite(accumulator, content, layer.BlendMode == LayerBlendMode.PassThrough ? LayerBlendMode.Normal : layer.BlendMode, layer.Opacity);
         }
+    }
+
+    /// <summary>
+    /// Plain pixel layers (no style, mask or CPU-only blend mode) are drawn straight onto the accumulator,
+    /// which avoids allocating and filling a document-sized bitmap per layer.
+    /// </summary>
+    private static bool TryDrawRasterDirect(Layer layer, SKBitmap accumulator, RenderContext context)
+    {
+        if (layer is not RasterLayer raster || layer.Style is { HasAny: true } || layer.Mask != null && layer.MaskEnabled) return false;
+        if (layer.BlendMode == LayerBlendMode.Dissolve || BlendModes.ToSkia(layer.BlendMode) is not SKBlendMode blend) return false;
+        float alpha = layer.Opacity * layer.FillOpacity;
+        SKRectI area = context.Area;
+        if (alpha <= 0 || !raster.SurfaceBounds.IntersectsWith(area)) return true;
+        using SKCanvas canvas = new(accumulator);
+        using SKPaint paint = new() { BlendMode = blend, Color = SKColors.White.WithAlpha((byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255)) };
+        canvas.DrawBitmap(raster.Surface.Bitmap, raster.Offset.X - area.Left, raster.Offset.Y - area.Top, paint);
+        return true;
     }
 
     private static void RenderClippedRun(List<Layer> clipped, SKBitmap baseContent, RenderContext context, SKBitmap? clipSource)

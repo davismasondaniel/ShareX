@@ -51,6 +51,12 @@ public sealed class LayersPanel : EditorPanel
     private readonly Dictionary<Layer, RowParts> _rows = [];
     private static readonly IBrush ThumbFrame = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A));
 
+    /// <summary>Thumbnails of frozen (immutable) surfaces, so unchanged layers are not re-rendered on every refresh.</summary>
+    private sealed record CachedThumb((int, int, int, int) Key, Avalonia.Media.Imaging.Bitmap Image);
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PixelSurface, CachedThumb> LayerThumbs = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PixelSurface, CachedThumb> MaskThumbs = new();
+
     private sealed record RowParts(Border Row, TextBlock Name, Border Thumbnail, Border? Mask);
 
     private static NumericUpDown DialogsNumber() => new() { Minimum = 0, Maximum = 100, Increment = 1, FormatString = "0", Width = 42, ShowButtonSpinner = false };
@@ -291,7 +297,7 @@ public sealed class LayersPanel : EditorPanel
                 BorderThickness = new Thickness(1),
                 BorderBrush = editingMask ? Brushes.White : frame,
                 Opacity = layer.MaskEnabled ? 1 : 0.4,
-                Child = new Image { Source = BitmapHelper.ToAvalonia(BitmapHelper.MaskThumbnail(layer.Mask, 30)) },
+                Child = new Image { Source = MaskThumbnail(layer.Mask) },
                 VerticalAlignment = VerticalAlignment.Center
             };
             ToolTip.SetTip(mask, "Click to edit the mask, Shift-click to disable it, Ctrl-click to load it as a selection");
@@ -384,10 +390,30 @@ public sealed class LayersPanel : EditorPanel
         return row;
     }
 
+    private static Avalonia.Media.Imaging.Bitmap MaskThumbnail(PixelSurface mask)
+    {
+        if (mask.Frozen && MaskThumbs.TryGetValue(mask, out CachedThumb? cached)) return cached.Image;
+        using SKBitmap rendered = BitmapHelper.MaskThumbnail(mask, 30);
+        Avalonia.Media.Imaging.Bitmap image = BitmapHelper.ToAvalonia(rendered);
+        if (mask.Frozen) MaskThumbs.AddOrUpdate(mask, new CachedThumb((0, 0, 0, 0), image));
+        return image;
+    }
+
     private Control CreateThumbnail(PhotoDocument doc, Layer layer)
     {
         try
         {
+            if (layer is RasterLayer { Surface.Frozen: true } raster)
+            {
+                (int, int, int, int) key = (raster.Offset.X, raster.Offset.Y, doc.Width, doc.Height);
+                if (!LayerThumbs.TryGetValue(raster.Surface, out CachedThumb? cached) || cached.Key != key)
+                {
+                    using SKBitmap rendered = BitmapHelper.LayerThumbnail(doc, layer, 34);
+                    cached = new CachedThumb(key, BitmapHelper.ToAvalonia(rendered));
+                    LayerThumbs.AddOrUpdate(raster.Surface, cached);
+                }
+                return new Image { Source = cached.Image, Stretch = Stretch.Uniform };
+            }
             using SKBitmap thumb = BitmapHelper.LayerThumbnail(doc, layer, 34);
             return new Image { Source = BitmapHelper.ToAvalonia(thumb), Stretch = Stretch.Uniform };
         }
