@@ -25,7 +25,6 @@
 
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ShareX.PhotoEditor.UI.Commands;

@@ -32,7 +32,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using ShareX.AvaloniaUI.Theming;
 using ShareX.PhotoEditor.Integration;
 using ShareX.PhotoEditor.Tools;
 using ShareX.PhotoEditor.UI.Commands;
