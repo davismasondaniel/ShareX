@@ -67,6 +67,18 @@ public static partial class EditorCommands
         R("image.duplicate", "Duplicate...", null, DuplicateDocument, HasDoc);
     }
 
+    /// <summary>Prepares a layer for an in-place edit limited to the selection: its writable surface, the edited area in surface pixels and the selection weight.</summary>
+    private static (PixelSurface Surface, SKRectI Area, Func<int, int, float>? Weight) BeginSelectionEdit(PhotoDocument doc, RasterLayer layer)
+    {
+        layer.EnsureCovers(doc.Bounds);
+        PixelSurface surface = layer.GetWritableSurface();
+        SKRectI area = doc.SelectionBounds;
+        area.Offset(-layer.Offset.X, -layer.Offset.Y);
+        area.Intersect(new SKRectI(0, 0, surface.Width, surface.Height));
+        Func<int, int, float>? weight = doc.Selection == null ? null : (x, y) => doc.SelectionAt(x + layer.Offset.X, y + layer.Offset.Y);
+        return (surface, area, weight);
+    }
+
     /// <summary>Applies an adjustment to the active layer (within the selection) without a dialog.</summary>
     private static void ApplyAdjustmentDirect(PhotoEditorWindow w, AdjustmentSettings settings, string name)
     {
@@ -78,11 +90,8 @@ public static partial class EditorCommands
         }
         RasterLayer? layer = EditableRaster(w, name.ToLowerInvariant());
         if (layer == null) return;
-        layer.EnsureCovers(doc.Bounds);
-        PixelSurface surface = layer.GetWritableSurface();
-        SKRectI area = doc.SelectionBounds;
-        area.Offset(-layer.Offset.X, -layer.Offset.Y);
-        Adjustments.Apply(settings, surface.Bitmap, area, doc.Selection == null ? null : (x, y) => doc.SelectionAt(x + layer.Offset.X, y + layer.Offset.Y));
+        (PixelSurface surface, SKRectI area, Func<int, int, float>? weight) = BeginSelectionEdit(doc, layer);
+        Adjustments.Apply(settings, surface.Bitmap, area, weight);
         w.Commit(name);
     }
 
@@ -151,12 +160,8 @@ public static partial class EditorCommands
         PhotoDocument doc = w.Document!;
         RasterLayer? layer = EditableRaster(w, "equalize");
         if (layer == null) return;
-        layer.EnsureCovers(doc.Bounds);
-        PixelSurface surface = layer.GetWritableSurface();
-        SKRectI area = doc.SelectionBounds;
-        area.Offset(-layer.Offset.X, -layer.Offset.Y);
-        area.Intersect(new SKRectI(0, 0, surface.Width, surface.Height));
-        Adjustments.Equalize(surface.Bitmap, area, doc.Selection == null ? null : (x, y) => doc.SelectionAt(x + layer.Offset.X, y + layer.Offset.Y));
+        (PixelSurface surface, SKRectI area, Func<int, int, float>? weight) = BeginSelectionEdit(doc, layer);
+        Adjustments.Equalize(surface.Bitmap, area, weight);
         w.Commit("Equalize");
     }
 

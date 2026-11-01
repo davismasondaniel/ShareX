@@ -28,7 +28,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using ShareX.PhotoEditor.UI.Commands;
 using ShareX.PhotoEditor.UI.Dialogs;
 
 namespace ShareX.PhotoEditor.UI.Panels;
