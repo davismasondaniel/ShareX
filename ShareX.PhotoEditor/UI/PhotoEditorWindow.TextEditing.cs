@@ -58,7 +58,7 @@ public sealed partial class PhotoEditorWindow
             BorderThickness = new Thickness(1),
             Padding = new Thickness(0),
             MinWidth = 20,
-            CaretBrush = Brushes.DodgerBlue
+            CaretBrush = OverlayContext.AccentBrush
         };
         _textEditor.TextChanged += (_, _) =>
         {

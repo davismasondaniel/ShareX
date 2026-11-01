@@ -30,6 +30,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ShareX.PhotoEditor.UI.Commands;
+using ShareX.PhotoEditor.UI.Theme;
 
 namespace ShareX.PhotoEditor.UI.Panels;
 
@@ -42,7 +43,7 @@ public sealed class LayersPanel : EditorPanel
     private readonly NumericUpDown _opacity = DialogsNumber();
     private readonly NumericUpDown _fill = DialogsNumber();
     private readonly StackPanel _locks = new() { Orientation = Orientation.Horizontal, Spacing = 0 };
-    private readonly Border _dropIndicator = new() { Height = 2, Background = new SolidColorBrush(Color.FromRgb(0x3E, 0x83, 0xF2)), IsVisible = false, IsHitTestVisible = false };
+    private readonly Border _dropIndicator = new() { Height = 2, Background = PhotoEditorTheme.AccentBrush, IsVisible = false, IsHitTestVisible = false };
     private bool _updating;
     private Layer? _dragLayer;
     private Point _dragStart;

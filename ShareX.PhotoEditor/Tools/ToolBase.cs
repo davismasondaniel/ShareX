@@ -28,6 +28,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using ShareX.PhotoEditor.UI;
+using ShareX.PhotoEditor.UI.Theme;
 
 namespace ShareX.PhotoEditor.Tools;
 
@@ -283,8 +284,8 @@ public sealed class OverlayContext
 {
     public static readonly IPen DarkPen = new Pen(new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)), 1);
     public static readonly IPen LightPen = new Pen(Brushes.White, 1, new DashStyle([4, 4], 0));
-    public static readonly IPen AccentPen = new Pen(new SolidColorBrush(Color.FromRgb(0x3E, 0x83, 0xF2)), 1);
-    public static readonly IBrush AccentBrush = new SolidColorBrush(Color.FromRgb(0x3E, 0x83, 0xF2));
+    public static readonly IBrush AccentBrush = PhotoEditorTheme.AccentBrush;
+    public static readonly IPen AccentPen = new Pen(AccentBrush, 1);
 
     public OverlayContext(DrawingContext drawing, DocumentView view)
     {

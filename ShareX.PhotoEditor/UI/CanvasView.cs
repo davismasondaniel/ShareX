@@ -31,6 +31,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ShareX.PhotoEditor.Tools;
+using ShareX.PhotoEditor.UI.Theme;
 
 namespace ShareX.PhotoEditor.UI;
 
@@ -199,12 +200,12 @@ public sealed class CanvasView : Control
         if (_editor.Tools.Active is not PathToolBase && doc.ActivePath != null && doc.ActiveLayer is not ShapeLayer)
         {
             using SKPath path = doc.ActivePath.Path.ToSKPath();
-            overlay.Path(path, new Pen(new SolidColorBrush(Color.FromArgb(200, 120, 160, 255)), 1));
+            overlay.Path(path, new Pen(new SolidColorBrush(PhotoEditorTheme.AccentBrush.Color, 0.8), 1));
         }
         if (_editor.Tools.Active is not PathToolBase && doc.ActiveLayer is ShapeLayer shape && _editor.Tools.Active is MoveTool)
         {
             using SKPath path = shape.Path.ToSKPath();
-            overlay.Path(path, new Pen(new SolidColorBrush(Color.FromArgb(120, 120, 160, 255)), 1));
+            overlay.Path(path, new Pen(new SolidColorBrush(PhotoEditorTheme.AccentBrush.Color, 0.5), 1));
         }
         _editor.Tools.Active.DrawOverlay(overlay);
         if (PendingGuide is Guide pending) DrawGuide(context, view, doc, pending, true);
@@ -313,8 +314,8 @@ public sealed class CanvasView : Control
         foreach (SliceItem slice in doc.Slices)
         {
             SKRectI b = slice.Bounds;
-            overlay.Rect(SKRect.Create(b.Left, b.Top, b.Width, b.Height), new Pen(new SolidColorBrush(Color.FromRgb(0x3E, 0x83, 0xF2)), 1));
-            overlay.Text(new SKPoint(b.Left, b.Top), $"{index++:00}", 2, 2, new SolidColorBrush(Color.FromRgb(0x3E, 0x83, 0xF2)));
+            overlay.Rect(SKRect.Create(b.Left, b.Top, b.Width, b.Height), OverlayContext.AccentPen);
+            overlay.Text(new SKPoint(b.Left, b.Top), $"{index++:00}", 2, 2, OverlayContext.AccentBrush);
         }
     }
 

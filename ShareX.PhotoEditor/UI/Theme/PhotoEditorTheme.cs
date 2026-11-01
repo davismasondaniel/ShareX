@@ -23,9 +23,12 @@
 
 #endregion License Information (GPL v3)
 
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Media;
 using Avalonia.Styling;
+using ShareX.AvaloniaUI.Theming;
 
 namespace ShareX.PhotoEditor.UI.Theme;
 
@@ -35,12 +38,24 @@ public static class PhotoEditorTheme
     private static readonly Uri BaseUri = new("avares://ShareX.PhotoEditor/");
     private static readonly Uri ThemeUri = new("avares://ShareX.PhotoEditor/UI/Theme/PhotoEditorTheme.axaml");
 
+    /// <summary>The configured ShareX accent color for code that draws without resources; follows accent changes.</summary>
+    public static SolidColorBrush AccentBrush { get; } = CreateAccentBrush();
+
+    private static SolidColorBrush CreateAccentBrush()
+    {
+        object? resource = null;
+        Application.Current?.TryFindResource("ShareX.Color.Accent.Start", ThemeManager.GetCurrentTheme(), out resource);
+        SolidColorBrush brush = new(resource is Color color ? color : Colors.White);
+        ThemeManager.AccentColorChanged += (_, accent) => brush.Color = accent;
+        return brush;
+    }
+
     public static void Apply(Window window)
     {
         window.RequestedThemeVariant = ThemeVariant.Dark;
         window.Styles.Add(new StyleInclude(BaseUri) { Source = ThemeUri });
         window.Bind(Window.BackgroundProperty, window.GetResourceObservable("PE.Brush.Chrome"));
-        window.FontFamily = new Avalonia.Media.FontFamily("Segoe UI");
+        window.FontFamily = new FontFamily("Segoe UI");
         window.FontSize = 12;
     }
 }
