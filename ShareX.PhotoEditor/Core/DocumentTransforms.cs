@@ -76,9 +76,9 @@ public static class DocumentTransforms
     }
 
     /// <summary>Transforms one layer (and its descendants) in place within the current canvas.</summary>
-    public static void TransformLayerInPlace(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample)
+    public static void TransformLayerInPlace(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample, SKRectI? knownOpaqueBounds = null)
     {
-        TransformLayerContent(layer, matrix, width, height, resample);
+        TransformLayerContent(layer, matrix, width, height, resample, knownOpaqueBounds);
         if (layer is GroupLayer group)
         {
             foreach (Layer child in group.Descendants()) TransformLayerContent(child, matrix, width, height, resample);
@@ -88,11 +88,11 @@ public static class DocumentTransforms
     /// <summary>Largest raster layer (in pixels) a transform may create when it keeps content outside the canvas.</summary>
     private const long MaxExpandedPixels = 64_000_000;
 
-    private static void TransformLayerContent(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample)
+    private static void TransformLayerContent(Layer layer, SKMatrix matrix, int width, int height, ResampleMethod resample, SKRectI? knownOpaqueBounds = null)
     {
         if (layer is RasterLayer { IsBackground: false } raster)
         {
-            TransformRasterKeepingOverflow(raster, matrix, width, height, resample);
+            TransformRasterKeepingOverflow(raster, matrix, width, height, resample, knownOpaqueBounds);
             TransformLayerMask(layer, matrix, width, height);
             return;
         }
@@ -102,9 +102,9 @@ public static class DocumentTransforms
     /// <summary>
     /// Transforms a raster layer and keeps the parts that land outside the canvas so a later transform can bring them back.
     /// </summary>
-    private static void TransformRasterKeepingOverflow(RasterLayer raster, SKMatrix matrix, int width, int height, ResampleMethod resample)
+    private static void TransformRasterKeepingOverflow(RasterLayer raster, SKMatrix matrix, int width, int height, ResampleMethod resample, SKRectI? knownOpaqueBounds)
     {
-        SKRectI opaque = raster.GetOpaqueBounds();
+        SKRectI opaque = knownOpaqueBounds ?? raster.GetOpaqueBounds();
         SKMatrix full = SKMatrix.CreateTranslation(raster.Offset.X, raster.Offset.Y).PostConcat(matrix);
         SKRect mapped = matrix.MapRect(SKRect.Create(opaque.Left, opaque.Top, opaque.Width, opaque.Height));
         SKRectI target = opaque.IsEmpty ? new SKRectI(0, 0, width, height) : new SKRectI((int)MathF.Floor(mapped.Left) - 1, (int)MathF.Floor(mapped.Top) - 1, (int)MathF.Ceiling(mapped.Right) + 1, (int)MathF.Ceiling(mapped.Bottom) + 1);

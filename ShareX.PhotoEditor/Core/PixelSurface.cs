@@ -34,11 +34,23 @@ namespace ShareX.PhotoEditor.Core;
 public sealed class PixelSurface : IDisposable
 {
     private readonly SKBitmap _bitmap;
+    private readonly int _width, _height, _rowBytes;
+    private readonly bool _isMask;
+    private readonly IntPtr _pixels;
 
     public PixelSurface(SKBitmap bitmap)
     {
         _bitmap = bitmap ?? throw new ArgumentNullException(nameof(bitmap));
+        // Size and format never change; caching them avoids a native call per access in per-pixel loops.
+        _width = bitmap.Width;
+        _height = bitmap.Height;
+        _rowBytes = bitmap.RowBytes;
+        _isMask = bitmap.ColorType == SKColorType.Alpha8;
+        _pixels = bitmap.GetPixels();
     }
+
+    /// <summary>Address of the first pixel. Throws if the surface was disposed.</summary>
+    public IntPtr Pixels => IsDisposed ? throw new ObjectDisposedException(nameof(PixelSurface)) : _pixels;
 
     /// <summary>The pixels. Using a disposed surface throws instead of crashing inside the native graphics library.</summary>
     public SKBitmap Bitmap => IsDisposed ? throw new ObjectDisposedException(nameof(PixelSurface)) : _bitmap;
@@ -47,15 +59,15 @@ public sealed class PixelSurface : IDisposable
 
     public bool IsDisposed { get; private set; }
 
-    public int Width => Bitmap.Width;
+    public int Width => _width;
 
-    public int Height => Bitmap.Height;
+    public int Height => _height;
 
-    public bool IsMask => Bitmap.ColorType == SKColorType.Alpha8;
+    public bool IsMask => _isMask;
 
     public SKRectI Bounds => new(0, 0, Width, Height);
 
-    public int RowBytes => Bitmap.RowBytes;
+    public int RowBytes => _rowBytes;
 
     public static PixelSurface CreateColor(int width, int height, SKColor? fill = null)
     {

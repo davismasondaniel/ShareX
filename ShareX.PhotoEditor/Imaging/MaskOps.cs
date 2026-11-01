@@ -36,7 +36,7 @@ public enum SelectionMode
 /// <summary>Operations on 8-bit masks (selections, layer masks and channels).</summary>
 public static class MaskOps
 {
-    public static unsafe byte* Ptr(PixelSurface mask) => (byte*)mask.Bitmap.GetPixels();
+    public static unsafe byte* Ptr(PixelSurface mask) => (byte*)mask.Pixels;
 
     /// <summary>Rasterizes a path into a new mask.</summary>
     public static PixelSurface FromPath(SKPath path, int width, int height, bool antialias = true)

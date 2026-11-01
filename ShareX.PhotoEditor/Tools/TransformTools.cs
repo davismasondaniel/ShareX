@@ -166,7 +166,7 @@ public sealed class TransformTool : ToolBase
         PhotoDocument? doc = Doc;
         if (doc == null || _original == null || _current == null) return;
         Layer updated = _original.CloneShared();
-        DocumentTransforms.TransformLayerInPlace(updated, CurrentMatrix, doc.Width, doc.Height, final ? Interpolation : ResampleMethod.Bilinear);
+        DocumentTransforms.TransformLayerInPlace(updated, CurrentMatrix, doc.Width, doc.Height, final ? Interpolation : ResampleMethod.Bilinear, _original is RasterLayer ? SKRectI.Round(_source) : null);
         GroupLayer parent = _current.Parent ?? doc.Root;
         int index = parent.Children.IndexOf(_current);
         if (index < 0) return;
