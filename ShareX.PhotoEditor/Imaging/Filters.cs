@@ -847,13 +847,15 @@ public static class Filters
         canvas.Clear(SKColors.Transparent);
         int tile = Math.Max(1, Math.Min(source.Width, source.Height) / Math.Max(1, count));
         Random random = new(seed);
+        // Convert once: drawing the bitmap directly would copy the whole image for every tile.
+        using SKImage image = SKImage.FromBitmap(source);
         for (int y = 0; y < source.Height; y += tile)
         {
             for (int x = 0; x < source.Width; x += tile)
             {
                 float ox = (random.NextSingle() * 2 - 1) * tile * maxOffset;
                 float oy = (random.NextSingle() * 2 - 1) * tile * maxOffset;
-                canvas.DrawBitmap(source, SKRect.Create(x, y, tile, tile), SKRect.Create(x + ox, y + oy, tile, tile));
+                canvas.DrawImage(image, SKRect.Create(x, y, tile, tile), SKRect.Create(x + ox, y + oy, tile, tile));
             }
         }
         return result;
