@@ -239,7 +239,8 @@ public static partial class EditorCommands
         if (doc?.FilePath == null) return;
         try
         {
-            using PhotoDocument reverted = ImageIO.Open(doc.FilePath);
+            // The reverted document is not disposed: the restored state shares its pixel surfaces.
+            PhotoDocument reverted = ImageIO.Open(doc.FilePath);
             doc.RestoreState(reverted.CaptureState());
             doc.History.Push("Revert");
             doc.IsDirty = false;
