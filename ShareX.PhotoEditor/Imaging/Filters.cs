@@ -447,27 +447,43 @@ public static class Filters
         uint* src = (uint*)source.GetPixels();
         uint* dst = (uint*)result.GetPixels();
         int stride = source.RowBytes / 4;
+        // Half width of the round window for every row offset.
+        int[] half = new int[radius * 2 + 1];
+        int count = 0;
+        for (int ky = -radius; ky <= radius; ky++)
+        {
+            half[ky + radius] = (int)MathF.Floor(MathF.Sqrt(Math.Max(0, radius * radius + radius - ky * ky)));
+            count += half[ky + radius] * 2 + 1;
+        }
+        int middle = count / 2;
         Parallel.For(0, height, y =>
         {
             int[] ha = new int[256], hr = new int[256], hg = new int[256], hb = new int[256];
+            void Add(uint p, int sign)
+            {
+                ha[p >> 24] += sign; hr[(p >> 16) & 0xFF] += sign; hg[(p >> 8) & 0xFF] += sign; hb[p & 0xFF] += sign;
+            }
+            // Fill the window for x = 0, then slide it: each step removes one pixel and adds one per window row.
+            for (int ky = -radius; ky <= radius; ky++)
+            {
+                uint* row = src + Math.Clamp(y + ky, 0, height - 1) * stride;
+                int w = half[ky + radius];
+                for (int kx = -w; kx <= w; kx++) Add(row[Math.Clamp(kx, 0, width - 1)], 1);
+            }
             for (int x = 0; x < width; x++)
             {
-                Array.Clear(ha); Array.Clear(hr); Array.Clear(hg); Array.Clear(hb);
-                int count = 0;
-                for (int ky = -radius; ky <= radius; ky++)
+                if (x > 0)
                 {
-                    int sy = Math.Clamp(y + ky, 0, height - 1);
-                    for (int kx = -radius; kx <= radius; kx++)
+                    for (int ky = -radius; ky <= radius; ky++)
                     {
-                        if (kx * kx + ky * ky > radius * radius + radius) continue;
-                        uint p = src[sy * stride + Math.Clamp(x + kx, 0, width - 1)];
-                        ha[p >> 24]++; hr[(p >> 16) & 0xFF]++; hg[(p >> 8) & 0xFF]++; hb[p & 0xFF]++;
-                        count++;
+                        uint* row = src + Math.Clamp(y + ky, 0, height - 1) * stride;
+                        int w = half[ky + radius];
+                        Add(row[Math.Clamp(x - 1 - w, 0, width - 1)], -1);
+                        Add(row[Math.Clamp(x + w, 0, width - 1)], 1);
                     }
                 }
-                int half = count / 2;
-                uint A = (uint)MedianOf(ha, half);
-                dst[y * stride + x] = (A << 24) | ((uint)Math.Min(MedianOf(hr, half), (int)A) << 16) | ((uint)Math.Min(MedianOf(hg, half), (int)A) << 8) | (uint)Math.Min(MedianOf(hb, half), (int)A);
+                uint A = (uint)MedianOf(ha, middle);
+                dst[y * stride + x] = (A << 24) | ((uint)Math.Min(MedianOf(hr, middle), (int)A) << 16) | ((uint)Math.Min(MedianOf(hg, middle), (int)A) << 8) | (uint)Math.Min(MedianOf(hb, middle), (int)A);
             }
         });
         return result;
