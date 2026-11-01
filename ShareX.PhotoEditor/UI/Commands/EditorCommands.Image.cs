@@ -55,15 +55,15 @@ public static partial class EditorCommands
         R("image.autoColor", "Auto Color", "Ctrl+Shift+B", w => AutoLevels(w, true, "Auto Color"), HasDoc);
         R("image.imageSize", "Image Size...", "Ctrl+Alt+I", w => _ = ImageSizeAsync(w), HasDoc);
         R("image.canvasSize", "Canvas Size...", "Ctrl+Alt+C", w => _ = CanvasSizeAsync(w), HasDoc);
-        R("image.rotate180", "180°", null, w => RotateCanvas(w, 180), HasDoc);
-        R("image.rotate90cw", "90° Clockwise", null, w => RotateCanvas(w, 90), HasDoc);
-        R("image.rotate90ccw", "90° Counter Clockwise", null, w => RotateCanvas(w, -90), HasDoc);
+        R("image.rotate180", "180°", null, w => _ = RotateCanvasAsync(w, 180), HasDoc);
+        R("image.rotate90cw", "90° Clockwise", null, w => _ = RotateCanvasAsync(w, 90), HasDoc);
+        R("image.rotate90ccw", "90° Counter Clockwise", null, w => _ = RotateCanvasAsync(w, -90), HasDoc);
         R("image.rotateArbitrary", "Arbitrary...", null, w => _ = RotateArbitraryAsync(w), HasDoc);
-        R("image.flipH", "Flip Canvas Horizontal", null, w => { DocumentTransforms.Flip(w.Document!, true); w.Commit("Flip Canvas Horizontal"); }, HasDoc);
-        R("image.flipV", "Flip Canvas Vertical", null, w => { DocumentTransforms.Flip(w.Document!, false); w.Commit("Flip Canvas Vertical"); }, HasDoc);
-        R("image.crop", "Crop", null, CropToSelection, HasSelection);
+        R("image.flipH", "Flip Canvas Horizontal", null, w => _ = EditDocumentAsync(w, "flip the canvas", "Flip Canvas Horizontal", d => DocumentTransforms.Flip(d, true)), HasDoc);
+        R("image.flipV", "Flip Canvas Vertical", null, w => _ = EditDocumentAsync(w, "flip the canvas", "Flip Canvas Vertical", d => DocumentTransforms.Flip(d, false)), HasDoc);
+        R("image.crop", "Crop", null, w => _ = CropToSelectionAsync(w), HasSelection);
         R("image.trim", "Trim...", null, w => _ = TrimAsync(w), HasDoc);
-        R("image.revealAll", "Reveal All", null, RevealAll, HasDoc);
+        R("image.revealAll", "Reveal All", null, w => _ = RevealAllAsync(w), HasDoc);
         R("image.duplicate", "Duplicate...", null, DuplicateDocument, HasDoc);
     }
 
@@ -168,27 +168,61 @@ public static partial class EditorCommands
         ApplyAdjustmentDirect(w, settings, name);
     }
 
+    /// <summary>Documents with at least this many layer pixels are edited on a background thread behind the busy overlay.</summary>
+    private const long BackgroundEditPixels = 3_000_000;
+
     /// <summary>
-    /// Runs a whole-document edit. If it fails part way (for example out of memory), the document is restored to its last
-    /// history state so layers are never left half transformed.
+    /// Runs a whole-document edit on a private copy of the document and swaps the result in only when it succeeds, so a
+    /// failure (for example out of memory) never leaves layers half transformed. Large documents are processed on a
+    /// background thread so the window stays responsive. Returns false if the edit failed or was abandoned.
     /// </summary>
-    private static bool TryEdit(PhotoEditorWindow w, string action, Action edit)
+    private static async Task<bool> EditDocumentAsync(PhotoEditorWindow w, string action, string historyName, Action<PhotoDocument> edit)
     {
         PhotoDocument doc = w.Document!;
-        try
+        DocumentState before = doc.CaptureState();
+        PhotoDocument work = new(before.Width, before.Height, before.Resolution, createBackground: false);
+        work.RestoreState(before);
+
+        DocumentState? after = null;
+        Exception? error = null;
+        void Run()
         {
-            edit();
-            return true;
+            try
+            {
+                edit(work);
+                after = work.CaptureState();
+            }
+            catch (OperationCanceledException)
+            {
+                // The edit found nothing to do.
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+
+        long pixels = work.Root.Surfaces.Sum(s => (long)s.Width * s.Height);
+        if (pixels < BackgroundEditPixels) Run();
+        else await w.RunBusyAsync(historyName + "...", _ => Task.Run(Run));
+
+        if (error != null)
         {
-            if (doc.History.Current != null) doc.RestoreState(doc.History.Current.State);
-            w.View?.FitOnScreen();
-            w.RefreshPanels();
-            w.InvalidateCanvas();
-            w.ShowMessage($"Could not {action}: {ex.Message}");
+            w.ShowMessage($"Could not {action}: {error.Message}");
             return false;
         }
+        // The document may have been closed or replaced while the work ran.
+        if (after == null || !ReferenceEquals(w.Document, doc)) return false;
+
+        HashSet<int> selected = [.. doc.SelectedLayerIds];
+        doc.RestoreState(after);
+        foreach (int id in selected)
+        {
+            if (doc.FindLayer(id) != null) doc.SelectedLayerIds.Add(id);
+        }
+        w.View?.FitOnScreen();
+        w.Commit(historyName);
+        return true;
     }
 
     private static async Task ImageSizeAsync(PhotoEditorWindow w)
@@ -202,15 +236,7 @@ public static partial class EditorCommands
             w.Commit("Image Size");
             return;
         }
-        bool resized = false;
-        await w.RunBusyAsync("Resizing...", _ =>
-        {
-            resized = TryEdit(w, "resize the image", () => DocumentTransforms.ResizeImage(doc, result.Width, result.Height, result.Method, result.Resolution));
-            return Task.CompletedTask;
-        });
-        if (!resized) return;
-        w.View?.FitOnScreen();
-        w.Commit("Image Size");
+        await EditDocumentAsync(w, "resize the image", "Image Size", d => DocumentTransforms.ResizeImage(d, result.Width, result.Height, result.Method, result.Resolution));
     }
 
     private static async Task CanvasSizeAsync(PhotoEditorWindow w)
@@ -218,16 +244,13 @@ public static partial class EditorCommands
         PhotoDocument doc = w.Document!;
         CanvasSizeDialog.Result? result = await CanvasSizeDialog.ShowAsync(w, doc.Width, doc.Height, w.Background);
         if (result == null) return;
-        if (!TryEdit(w, "change the canvas size", () => DocumentTransforms.CanvasSize(doc, result.Width, result.Height, result.Anchor, result.Extension))) return;
-        w.View?.FitOnScreen();
-        w.Commit("Canvas Size");
+        await EditDocumentAsync(w, "change the canvas size", "Canvas Size", d => DocumentTransforms.CanvasSize(d, result.Width, result.Height, result.Anchor, result.Extension));
     }
 
-    private static void RotateCanvas(PhotoEditorWindow w, float degrees)
+    private static Task<bool> RotateCanvasAsync(PhotoEditorWindow w, float degrees)
     {
-        if (!TryEdit(w, "rotate the canvas", () => DocumentTransforms.Rotate(w.Document!, degrees, w.Background))) return;
-        w.View?.FitOnScreen();
-        w.Commit($"Rotate Canvas {degrees}°");
+        SKColor background = w.Background;
+        return EditDocumentAsync(w, "rotate the canvas", $"Rotate Canvas {degrees}°", d => DocumentTransforms.Rotate(d, degrees, background));
     }
 
     /// <summary>Rotates the canvas (background layers) or just the active layer (used by the Ruler tool).</summary>
@@ -236,7 +259,7 @@ public static partial class EditorCommands
         PhotoEditorWindow w = W(host);
         if (canvas)
         {
-            RotateCanvas(w, degrees);
+            _ = RotateCanvasAsync(w, degrees);
             return;
         }
         w.Tools.Get<Tools.TransformTool>().ApplyImmediate(bounds => SKMatrix.CreateRotationDegrees(degrees, bounds.MidX, bounds.MidY), "Straighten Layer");
@@ -252,17 +275,18 @@ public static partial class EditorCommands
         DialogBuilder.AddRow(form, "Angle (°):", number);
         DialogBuilder.AddRow(form, "Direction:", DialogBuilder.Combo([("Clockwise", true), ("Counter Clockwise", false)], clockwise, v => clockwise = v));
         if (!await DialogBuilder.ShowAsync(w, "Rotate Canvas", form, 360) || angle == 0) return;
-        RotateCanvas(w, (float)(clockwise ? angle : -angle));
+        await RotateCanvasAsync(w, (float)(clockwise ? angle : -angle));
     }
 
-    private static void CropToSelection(PhotoEditorWindow w)
+    private static Task<bool> CropToSelectionAsync(PhotoEditorWindow w)
     {
-        PhotoDocument doc = w.Document!;
-        SKRectI bounds = doc.SelectionBounds;
-        doc.SetSelectionLive(null);
-        DocumentTransforms.Crop(doc, bounds, true, w.Background);
-        w.View?.FitOnScreen();
-        w.Commit("Crop");
+        SKRectI bounds = w.Document!.SelectionBounds;
+        SKColor background = w.Background;
+        return EditDocumentAsync(w, "crop the image", "Crop", d =>
+        {
+            d.SetSelectionLive(null);
+            DocumentTransforms.Crop(d, bounds, true, background);
+        });
     }
 
     private static async Task TrimAsync(PhotoEditorWindow w)
@@ -272,22 +296,25 @@ public static partial class EditorCommands
         Grid form = DialogBuilder.Form();
         DialogBuilder.AddRow(form, "Based on:", DialogBuilder.Combo([("Transparent Pixels", 0), ("Top Left Pixel Color", 1), ("Bottom Right Pixel Color", 2)], mode, v => mode = v));
         if (!await DialogBuilder.ShowAsync(w, "Trim", form, 380)) return;
-        using SKBitmap flat = Compositor.Flatten(doc);
-        SKRectI bounds = DocumentTransforms.TrimBounds(flat, mode == 0, mode == 1);
-        if (bounds.IsEmpty || bounds == doc.Bounds) return;
-        DocumentTransforms.Crop(doc, bounds, true, w.Background);
-        w.View?.FitOnScreen();
-        w.Commit("Trim");
+        SKColor background = w.Background;
+        await EditDocumentAsync(w, "trim the image", "Trim", d =>
+        {
+            using SKBitmap flat = Compositor.Flatten(d);
+            SKRectI bounds = DocumentTransforms.TrimBounds(flat, mode == 0, mode == 1);
+            if (bounds.IsEmpty || bounds == d.Bounds) throw new OperationCanceledException();
+            DocumentTransforms.Crop(d, bounds, true, background);
+        });
     }
 
-    private static void RevealAll(PhotoEditorWindow w)
+    private static Task<bool> RevealAllAsync(PhotoEditorWindow w)
     {
-        PhotoDocument doc = w.Document!;
-        SKRectI bounds = DocumentTransforms.ContentBounds(doc);
-        if (bounds == doc.Bounds) return;
-        DocumentTransforms.ApplyMatrix(doc, SKMatrix.CreateTranslation(-bounds.Left, -bounds.Top), bounds.Width, bounds.Height, ResampleMethod.NearestNeighbor, w.Background, true);
-        w.View?.FitOnScreen();
-        w.Commit("Reveal All");
+        SKColor background = w.Background;
+        return EditDocumentAsync(w, "reveal all", "Reveal All", d =>
+        {
+            SKRectI bounds = DocumentTransforms.ContentBounds(d);
+            if (bounds == d.Bounds) throw new OperationCanceledException();
+            DocumentTransforms.ApplyMatrix(d, SKMatrix.CreateTranslation(-bounds.Left, -bounds.Top), bounds.Width, bounds.Height, ResampleMethod.NearestNeighbor, background, true);
+        });
     }
 
     private static void DuplicateDocument(PhotoEditorWindow w)
