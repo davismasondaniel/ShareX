@@ -243,6 +243,9 @@ public abstract class BrushToolBase : ToolBase
     public override void Deactivate()
     {
         Hover = null;
+        _lastStrokeEnd = null;
+        _airbrushTimer?.Stop();
+        _airbrushTimer = null;
         base.Deactivate();
     }
 
