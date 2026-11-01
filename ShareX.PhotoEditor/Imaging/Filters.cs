@@ -861,14 +861,54 @@ public static class Filters
         return result;
     }
 
-    public static SKBitmap Morphology(SKBitmap source, int radius, bool maximum)
+    public static unsafe SKBitmap Morphology(SKBitmap source, int radius, bool maximum)
     {
-        SKBitmap result = ImageOps.CreateBitmap(source.Width, source.Height);
-        result.Erase(SKColors.Transparent);
-        using SKCanvas canvas = new(result);
-        using SKImageFilter filter = maximum ? SKImageFilter.CreateDilate(radius, radius) : SKImageFilter.CreateErode(radius, radius);
-        using SKPaint paint = new() { ImageFilter = filter };
-        canvas.DrawBitmap(source, 0, 0, paint);
+        // Square window maximum/minimum per channel, done as two separable van Herk passes so the cost does not grow with the radius.
+        // Pixels beyond the edge repeat the border, so Minimum does not eat into the image edges.
+        int width = source.Width, height = source.Height;
+        radius = Math.Max(1, radius);
+        int window = radius * 2 + 1;
+        SKBitmap temp = ImageOps.CreateBitmap(width, height);
+        SKBitmap result = ImageOps.CreateBitmap(width, height);
+        uint* src = (uint*)source.GetPixels();
+        uint* mid = (uint*)temp.GetPixels();
+        uint* dst = (uint*)result.GetPixels();
+        int srcStride = source.RowBytes / 4, midStride = temp.RowBytes / 4, dstStride = result.RowBytes / 4;
+
+        void Pass(int lines, int length, uint* from, int fromLine, int fromStep, uint* to, int toLine, int toStep)
+        {
+            int padded = length + window - 1;
+            Parallel.For(0, lines,
+                () => (new byte[padded], new byte[padded], new byte[padded], new byte[length]),
+                (line, _, buffers) =>
+                {
+                    (byte[] input, byte[] g, byte[] h, byte[] output) = buffers;
+                    for (int shift = 0; shift < 32; shift += 8)
+                    {
+                        for (int i = 0; i < padded; i++)
+                        {
+                            int k = Math.Clamp(i - radius, 0, length - 1);
+                            input[i] = (byte)(from[line * fromLine + k * fromStep] >> shift);
+                        }
+                        for (int i = 0; i < padded; i++)
+                            g[i] = i % window == 0 ? input[i] : maximum ? Math.Max(g[i - 1], input[i]) : Math.Min(g[i - 1], input[i]);
+                        for (int i = padded - 1; i >= 0; i--)
+                            h[i] = i == padded - 1 || (i + 1) % window == 0 ? input[i] : maximum ? Math.Max(h[i + 1], input[i]) : Math.Min(h[i + 1], input[i]);
+                        for (int x = 0; x < length; x++)
+                        {
+                            byte value = maximum ? Math.Max(h[x], g[x + window - 1]) : Math.Min(h[x], g[x + window - 1]);
+                            uint* target = to + line * toLine + x * toStep;
+                            *target = (*target & ~(0xFFu << shift)) | ((uint)value << shift);
+                        }
+                    }
+                    return buffers;
+                },
+                _ => { });
+        }
+
+        Pass(height, width, src, srcStride, 1, mid, midStride, 1);
+        Pass(width, height, mid, 1, midStride, dst, 1, dstStride);
+        temp.Dispose();
         return result;
     }
 
