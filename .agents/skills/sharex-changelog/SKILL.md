@@ -85,7 +85,6 @@ Never add a `Bug fixes` line to a release that has feature entries, and never ad
 - Give settings locations in parentheses with `->`: `(Task settings -> Region capture -> Customize toolbar)`. Include one when a user could not otherwise find the option.
 - Put setting names, file extensions, and syntax in backticks: `` `UseMachineSpecificUploadersConfig` ``, `` `.sxcu` ``.
 - Link an external product or term at the bullet where it appears: `Added [Immich](https://immich.app) file uploader.` Use Wikipedia for technical terms, and `https://getsharex.com/docs/...` when a docs page exists. Do not link removed or dead services: `Removed Vault.ooo file uploader.`
-- Note how something works only when it matters to the user: `..., enabled by default.`, `(opt-in, disabled by default)`.
 
 Nest when an area has three or more entries, using a parent that ends in a colon, such as `Image editor improvements:`, `Scrolling capture improvements:`, or `Screen recording changes:`. A new feature can also carry its details as children, such as `Added "Step type" option for Step tool, with this options:`. Plain value and option lists have no trailing period, and their items are bare names.
 
@@ -122,7 +121,7 @@ Real commits from `v22.0.0..HEAD` and the entries the maintainer wrote for them:
 
 | Commits | Entry |
 | --- | --- |
-| `Add adaptive GIF output to screen recording`, `Optimize GIF compression and remove frame quantizer`, `Merge consecutive GIF frames with identical quantized pixels`, `Encode GIF frames as cropped partial updates`, `Reuse a global palette for animated GIF frames` | `Added native GIF screen recording support without relying on FFmpeg, enabled by default.` |
+| `Add adaptive GIF output to screen recording`, `Optimize GIF compression and remove frame quantizer`, `Merge consecutive GIF frames with identical quantized pixels`, `Encode GIF frames as cropped partial updates`, `Reuse a global palette for animated GIF frames` | `Added native GIF screen recording support without relying on FFmpeg.` |
 | `fixed #8674: Add clone tool to image editor` | `Added "<kbd>D</kbd> Clone" annotation tool.` |
 | `Add Stats window built from local history`, `Add Share button to the Stats window`, 6 spacing, ordering, and calculation commits | `Added a "Stats" window that generates statistics from locally stored history.` with a `CubityFirst` badge |
 | `Add image editor toolbar icons that follow the accent color`, `Draw the editor toolbar icons in the text color instead of the accent` | `Replaced all annotation toolbar icons with custom designed icons that better represent their respective tools.` with a `CubityFirst` badge |
