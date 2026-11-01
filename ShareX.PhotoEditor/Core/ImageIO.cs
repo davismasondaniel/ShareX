@@ -36,7 +36,7 @@ public static class ImageIO
 
     public static IReadOnlyList<FileFormatInfo> Formats { get; } =
     [
-        new("Photo editor Project", [ProjectExtension], true),
+        new("ShareX Photo Editor Project", [ProjectExtension], true),
         new("PNG", [".png"], true),
         new("JPEG", [".jpg", ".jpeg", ".jpe", ".jfif"], true),
         new("WebP", [".webp"], true),
@@ -72,7 +72,7 @@ public static class ImageIO
             }
             catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException or KeyNotFoundException or NotSupportedException or FormatException)
             {
-                throw new InvalidDataException($"Could not open \"{Path.GetFileName(path)}\" because it is not a valid Photo editor project or the file is damaged.");
+                throw new InvalidDataException($"Could not open \"{Path.GetFileName(path)}\" because it is not a valid ShareX Photo Editor project or the file is damaged.");
             }
             project.FilePath = path;
             return project;

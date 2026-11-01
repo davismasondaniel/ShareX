@@ -172,7 +172,7 @@ public static partial class EditorCommands
         bool layered = doc.AllLayers.Count() > 1 || doc.AllLayers.Any(l => l is not RasterLayer) || doc.Channels.Count > 0 || doc.Paths.Count > 0;
         if (!saveAs && path != null && !ImageIO.IsProject(path) && layered)
         {
-            bool? keep = await DialogBuilder.ConfirmAsync(w, "Save", $"\"{Path.GetFileName(path)}\" does not support layers. Save a flattened copy in this format, or save as a Photo editor project to keep the layers?",
+            bool? keep = await DialogBuilder.ConfirmAsync(w, "Save", $"\"{Path.GetFileName(path)}\" does not support layers. Save a flattened copy in this format, or save as a ShareX Photo Editor project to keep the layers?",
                 "Flatten", "Save as Project");
             if (keep == null) return false;
             if (keep == false) saveAs = true;
